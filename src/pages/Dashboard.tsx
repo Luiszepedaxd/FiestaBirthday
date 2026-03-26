@@ -10,7 +10,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +38,14 @@ type FormMode = "create" | "edit";
 
 const formatBirthday = (birthday: string) =>
   new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "long" }).format(new Date(birthday));
+
+const getInitials = (name: string) =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
 
 const formatDaysBadge = (days: number) => {
   if (days === 1) return "en 1 día";
@@ -165,28 +172,36 @@ const DashboardContent = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between px-4">
-          <p className="text-lg font-bold tracking-tight">Fiestamas</p>
-          <Button variant="outline" size="sm" onClick={handleSignOut}>
+    <div
+      className="min-h-screen bg-[#FFFFFF] text-[#2E2D2C]"
+      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+    >
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-[#F2F2F2] bg-white">
+        <div className="mx-auto flex h-16 w-full max-w-[480px] items-center justify-between px-4">
+          <p className="text-xl font-bold lowercase tracking-tight text-[#C6017F]">fiestamas</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-[#717B99] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
+            onClick={handleSignOut}
+          >
             Cerrar sesión
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-24 pt-20">
+      <main className="mx-auto w-full max-w-[480px] space-y-6 px-4 pb-24 pt-20">
         {isLoading && (
           <section className="space-y-3">
-            <Skeleton className="h-6 w-28" />
+            <Skeleton className="h-[220px] w-full rounded-2xl" />
             <Skeleton className="h-24 w-full rounded-2xl" />
-            <Skeleton className="h-20 w-full rounded-xl" />
-            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
           </section>
         )}
 
         {isError && (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
             Error al cargar contactos: {error instanceof Error ? error.message : "Error desconocido"}
           </div>
         )}
@@ -194,38 +209,52 @@ const DashboardContent = () => {
         {!isLoading && !isError && (
           <>
             {todayBirthdays.length > 0 && (
-              <section className="space-y-3">
-                <h2 className="text-xl font-semibold">Hoy 🎂</h2>
+              <section>
                 {todayBirthdays.map((contact) => (
                   <div
                     key={contact.id}
-                    className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-sm"
+                    className="relative h-[220px] overflow-hidden rounded-2xl"
                   >
-                    <p className="text-sm opacity-90">Hoy cumple años</p>
-                    <p className="mt-1 text-2xl font-bold">{contact.name}</p>
+                    <img
+                      src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800"
+                      alt="Cumpleaños del día"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-black/10" />
+                    <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                      <p className="text-sm font-medium text-white/80">Hoy es el día de</p>
+                      <p className="mt-1 text-[28px] font-bold leading-tight">{contact.name}</p>
+                    </div>
                   </div>
                 ))}
               </section>
             )}
 
             <section className="space-y-3">
-              <h2 className="text-xl font-semibold">Esta semana</h2>
+              <h2 className="text-base font-bold text-[#2E2D2C]">Esta semana 🎂</h2>
               {upcomingWeekBirthdays.length === 0 ? (
-                <p className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                <p className="rounded-2xl bg-[#FAFAFA] p-5 text-center text-sm text-[#717B99]">
                   Nadie cumple esta semana 🎉
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {upcomingWeekBirthdays.map((contact) => (
                     <div
                       key={contact.id}
-                      className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
+                      className="flex items-center justify-between rounded-2xl border border-[#F2F2F2] bg-white p-4"
                     >
-                      <div>
-                        <p className="font-medium">{contact.name}</p>
-                        <p className="text-sm text-muted-foreground">{formatBirthday(contact.birthday)}</p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#C6017F] text-sm font-bold text-white">
+                          {getInitials(contact.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-[#2E2D2C]">{contact.name}</p>
+                          <p className="text-xs text-[#717B99]">{formatBirthday(contact.birthday)}</p>
+                        </div>
                       </div>
-                      <Badge variant="secondary">{formatDaysBadge(contact.daysUntilBirthday)}</Badge>
+                      <span className="shrink-0 rounded-full bg-[#FFF0F9] px-3 py-1 text-xs font-semibold text-[#C6017F]">
+                        {formatDaysBadge(contact.daysUntilBirthday)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -233,13 +262,13 @@ const DashboardContent = () => {
             </section>
 
             <section className="space-y-3">
-              <h2 className="text-xl font-semibold">Tus contactos</h2>
+              <h2 className="text-base font-bold text-[#2E2D2C]">Tus contactos</h2>
               {orderedContacts.length === 0 ? (
-                <p className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                <p className="rounded-2xl bg-[#FAFAFA] p-5 text-sm text-[#717B99]">
                   Aún no tienes contactos, agrega el primero 👇
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="rounded-2xl border border-[#F2F2F2] bg-white">
                   {orderedContacts.map((contact) => (
                     <button
                       type="button"
@@ -248,11 +277,16 @@ const DashboardContent = () => {
                         setSelectedContact(contact);
                         setIsActionsDrawerOpen(true);
                       }}
-                      className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary/60"
+                      className="flex w-full items-center gap-3 border-b border-[#F2F2F2] p-4 text-left last:border-b-0"
                     >
-                      <p className="font-medium">{contact.name}</p>
-                      <p className="text-sm text-muted-foreground">{contact.phone || "Sin teléfono"}</p>
-                      <p className="text-sm text-muted-foreground">{formatBirthday(contact.birthday)}</p>
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#5221D6] text-sm font-bold text-white">
+                        {getInitials(contact.name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-[#2E2D2C]">{contact.name}</p>
+                        <p className="truncate text-xs text-[#717B99]">{contact.phone || "Sin teléfono"}</p>
+                        <p className="text-xs text-[#717B99]">{formatBirthday(contact.birthday)}</p>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -264,17 +298,19 @@ const DashboardContent = () => {
 
       <Button
         size="icon"
-        className="fixed bottom-6 right-6 z-30 h-14 w-14 rounded-full text-3xl"
+        className="fixed bottom-6 right-6 z-30 h-14 w-14 rounded-full bg-[#C6017F] text-3xl text-white shadow-[0_4px_20px_rgba(198,1,127,0.4)] hover:bg-[#B10072]"
         onClick={openCreateDrawer}
       >
         +
       </Button>
 
       <Drawer open={isFormDrawerOpen} onOpenChange={setIsFormDrawerOpen}>
-        <DrawerContent>
+        <DrawerContent className="rounded-t-2xl">
           <DrawerHeader>
-            <DrawerTitle>{formMode === "create" ? "Nuevo contacto" : "Editar contacto"}</DrawerTitle>
-            <DrawerDescription>
+            <DrawerTitle className="font-bold text-[#2E2D2C]">
+              {formMode === "create" ? "Nuevo contacto" : "Editar contacto"}
+            </DrawerTitle>
+            <DrawerDescription className="text-[#717B99]">
               {formMode === "create"
                 ? "Completa los datos para guardar el contacto."
                 : "Actualiza la información del contacto seleccionado."}
@@ -282,26 +318,49 @@ const DashboardContent = () => {
           </DrawerHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-4 pb-6">
             <div className="space-y-2">
-              <Label htmlFor="name">Nombre</Label>
-              <Input id="name" {...form.register("name")} />
+              <Label htmlFor="name" className="text-[#2E2D2C]">
+                Nombre
+              </Label>
+              <Input
+                id="name"
+                className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+                {...form.register("name")}
+              />
               {form.formState.errors.name && (
                 <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="birthday">Fecha de cumpleaños</Label>
-              <Input id="birthday" type="date" {...form.register("birthday")} />
+              <Label htmlFor="birthday" className="text-[#2E2D2C]">
+                Fecha de cumpleaños
+              </Label>
+              <Input
+                id="birthday"
+                type="date"
+                className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+                {...form.register("birthday")}
+              />
               {form.formState.errors.birthday && (
                 <p className="text-sm text-destructive">{form.formState.errors.birthday.message}</p>
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Teléfono (opcional)</Label>
-              <Input id="phone" {...form.register("phone")} />
+              <Label htmlFor="phone" className="text-[#2E2D2C]">
+                Teléfono (opcional)
+              </Label>
+              <Input
+                id="phone"
+                className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+                {...form.register("phone")}
+              />
             </div>
             {submitError && <p className="text-sm text-destructive">{submitError}</p>}
             <DrawerFooter className="px-0 pb-0">
-              <Button type="submit" disabled={saveContactMutation.isPending}>
+              <Button
+                type="submit"
+                disabled={saveContactMutation.isPending}
+                className="h-12 w-full rounded-xl bg-[#C6017F] text-white hover:bg-[#B10072]"
+              >
                 {saveContactMutation.isPending ? "Guardando..." : "Guardar"}
               </Button>
               <DrawerClose asChild>
@@ -315,10 +374,12 @@ const DashboardContent = () => {
       </Drawer>
 
       <Drawer open={isActionsDrawerOpen} onOpenChange={setIsActionsDrawerOpen}>
-        <DrawerContent>
+        <DrawerContent className="rounded-t-2xl">
           <DrawerHeader>
-            <DrawerTitle>{selectedContact?.name}</DrawerTitle>
-            <DrawerDescription>Selecciona una acción para este contacto.</DrawerDescription>
+            <DrawerTitle className="font-bold text-[#2E2D2C]">{selectedContact?.name}</DrawerTitle>
+            <DrawerDescription className="text-[#717B99]">
+              Selecciona una acción para este contacto.
+            </DrawerDescription>
           </DrawerHeader>
           <DrawerFooter>
             <Button type="button" onClick={openEditDrawer}>
