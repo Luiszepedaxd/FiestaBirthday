@@ -209,27 +209,47 @@ const DashboardContent = () => {
 
         {!isLoading && !isError && (
           <>
-            {todayBirthdays.length > 0 && (
-              <section>
-                {todayBirthdays.map((contact) => (
-                  <div
-                    key={contact.id}
-                    className="relative h-[220px] overflow-hidden rounded-2xl"
-                  >
+            {orderedContacts.length > 0 && (() => {
+              const heroContact = todayBirthdays.length > 0 ? todayBirthdays[0] : orderedContacts[0];
+              const isToday = todayBirthdays.length > 0;
+              const days = heroContact.daysUntilBirthday;
+              const badgeLabel = isToday ? "Hoy 🎂" : `En ${days} día${days === 1 ? "" : "s"} 🎂`;
+              return (
+                <section>
+                  <div className="relative overflow-hidden rounded-2xl" style={{ height: 280 }}>
                     <img
                       src="/birthday-hero.jpg"
-                      alt="Cumpleaños del día"
-                      className="h-full w-full object-cover"
+                      alt="Cumpleaños"
+                      style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-black/10" />
                     <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-                      <p className="text-sm font-medium text-white/80">Hoy es el día de</p>
-                      <p className="mt-1 text-[28px] font-bold leading-tight">{contact.name}</p>
+                      <span
+                        className="mb-2 inline-block rounded-full px-3 py-1 text-xs font-bold text-white"
+                        style={{ backgroundColor: isToday ? "#C6017F" : "rgba(255,255,255,0.2)", backdropFilter: "blur(4px)" }}
+                      >
+                        {badgeLabel}
+                      </span>
+                      <p className="text-[32px] font-bold leading-tight text-white">{heroContact.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => console.log("felicitar", heroContact)}
+                        className="mt-3 font-semibold text-white"
+                        style={{
+                          backgroundColor: "#C6017F",
+                          borderRadius: 24,
+                          padding: "12px 32px",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Felicitar 🎉
+                      </button>
                     </div>
                   </div>
-                ))}
-              </section>
-            )}
+                </section>
+              );
+            })()}
 
             <section className="space-y-3">
               <h2 className="text-base font-bold text-[#2E2D2C]">Esta semana 🎂</h2>
