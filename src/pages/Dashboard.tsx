@@ -125,6 +125,7 @@ const DashboardContent = () => {
   const currentMonth = now.getMonth();
 
   const todayContacts = orderedContacts.filter((c) => getDaysUntil(c.birthday) === 0);
+  const todayBirthdays = todayContacts;
   const thisMonthContacts = orderedContacts.filter((c) => {
     const days = getDaysUntil(c.birthday);
     const parsed = new Date(c.birthday);
