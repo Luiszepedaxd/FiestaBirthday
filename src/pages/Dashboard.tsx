@@ -635,9 +635,6 @@ const DashboardContent = () => {
                         setCalendarOpen(false);
                       }}
                       locale={es}
-                      captionLayout="dropdown"
-                      fromYear={1940}
-                      toYear={2024}
                       showOutsideDays={false}
                       className="rounded-xl"
                     />
