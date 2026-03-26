@@ -182,6 +182,7 @@ type CongratModalProps = {
 type GiftPhase = "idle" | "loading" | "error" | "success";
 
 const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
+  const queryClient = useQueryClient();
   const [giftPhase, setGiftPhase] = useState<GiftPhase>("idle");
   const [giftItems, setGiftItems] = useState<{ title: string; description: string; price: string }[]>([]);
 
@@ -258,6 +259,18 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
       const items = parseGiftSuggestionsContent(raw);
       setGiftItems(items);
       setGiftPhase("success");
+
+      const giftHistory = {
+        date: new Date().toISOString(),
+        suggestions: items,
+      };
+      const { error: giftSaveError } = await supabase
+        .from("contacts")
+        .update({ gift_history: giftHistory })
+        .eq("id", contact.id);
+      if (!giftSaveError) {
+        await queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      }
     } catch {
       setGiftPhase("error");
       setGiftItems([]);
@@ -270,7 +283,8 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="w-full h-full max-w-full m-0 rounded-none sm:rounded-2xl sm:max-w-md sm:h-auto sm:m-auto overflow-y-auto p-0">
+      <DialogContent className="w-full h-full max-w-full m-0 rounded-none sm:rounded-2xl sm:max-w-md sm:h-auto sm:m-auto p-0">
+        <div className="overflow-y-auto max-h-[90vh]">
         <DialogTitle className="sr-only">Felicitar a {contact.name}</DialogTitle>
         <DialogDescription className="sr-only">Elige cómo quieres felicitar a {contact.name}</DialogDescription>
 
@@ -406,6 +420,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
               )}
             </div>
           )}
+        </div>
         </div>
       </DialogContent>
     </Dialog>
