@@ -22,6 +22,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/lib/supabase";
 import { type Contact, useContacts } from "@/hooks/useContacts";
 
@@ -382,6 +383,50 @@ const DashboardContent = () => {
             </DrawerDescription>
           </DrawerHeader>
           <DrawerFooter>
+            <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[#717B99]">
+              Acciones
+            </p>
+
+            <Button
+              type="button"
+              className="w-full border border-[#C6017F] bg-white text-[#C6017F] hover:bg-[#FFF0F9]"
+              variant="outline"
+              onClick={() => {
+                if (!selectedContact?.phone) {
+                  toast("Este contacto no tiene teléfono guardado");
+                  return;
+                }
+                const phone = selectedContact.phone.replace(/[\s\-]/g, "");
+                const name = encodeURIComponent(selectedContact.name);
+                window.open(
+                  `https://wa.me/52${phone}?text=¡Hola%20${name}!%20🎂%20¡Feliz%20cumpleaños!%20Espero%20que%20tengas%20un%20día%20increíble%20🎉`,
+                  "_blank",
+                );
+              }}
+            >
+              Felicitar por WhatsApp 💬
+            </Button>
+
+            <Button
+              type="button"
+              className="w-full border border-[#5221D6] bg-white text-[#5221D6] hover:bg-[#F3F0FF]"
+              variant="outline"
+              onClick={() => toast("Próximamente — sugerencias con IA")}
+            >
+              Sugerir regalo 🎁
+            </Button>
+
+            <Button
+              type="button"
+              className="w-full border border-[#C6017F] bg-white text-[#C6017F] hover:bg-[#FFF0F9]"
+              variant="outline"
+              onClick={() => window.open("https://fiestamas.com/c", "_blank")}
+            >
+              Organizar fiesta 🎉
+            </Button>
+
+            <div className="my-1 h-px w-full bg-[#F2F2F2]" />
+
             <Button type="button" onClick={openEditDrawer}>
               Editar
             </Button>
