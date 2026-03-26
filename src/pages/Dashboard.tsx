@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarIcon, MoreHorizontal } from "lucide-react";
+import { CalendarIcon, Loader2, MoreHorizontal } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,6 +38,39 @@ import { supabase } from "@/lib/supabase";
 import { type Contact, useContacts } from "@/hooks/useContacts";
 
 const dashboardQueryClient = new QueryClient();
+
+const ADMIN_EMAIL = "luis.j20000@gmail.com";
+
+const OPENROUTER_SETTINGS_KEY = "openrouter_api_key";
+
+function parseGiftSuggestionsContent(raw: string): { title: string; description: string; price: string }[] {
+  let text = raw.trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) text = fenced[1].trim();
+  const parsed = JSON.parse(text) as unknown;
+  let list: unknown[] = [];
+  if (Array.isArray(parsed)) {
+    list = parsed;
+  } else if (
+    parsed &&
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "suggestions" in parsed &&
+    Array.isArray((parsed as { suggestions: unknown[] }).suggestions)
+  ) {
+    list = (parsed as { suggestions: unknown[] }).suggestions;
+  } else {
+    throw new Error("Formato JSON inesperado");
+  }
+  return list.slice(0, 3).map((item) => {
+    const o = item as Record<string, unknown>;
+    return {
+      title: String(o.title ?? o.titulo ?? ""),
+      description: String(o.description ?? o.descripcion ?? ""),
+      price: String(o.price ?? o.precio ?? ""),
+    };
+  });
+}
 
 const contactSchema = z
   .object({
@@ -146,10 +179,21 @@ type CongratModalProps = {
   onClose: () => void;
 };
 
+type GiftPhase = "idle" | "loading" | "error" | "success";
+
 const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
-  if (!contact) return null;
+  const [giftPhase, setGiftPhase] = useState<GiftPhase>("idle");
+  const [giftItems, setGiftItems] = useState<{ title: string; description: string; price: string }[]>([]);
+
+  useEffect(() => {
+    if (!open) {
+      setGiftPhase("idle");
+      setGiftItems([]);
+    }
+  }, [open, contact?.id]);
 
   const handleWhatsApp = () => {
+    if (!contact) return;
     if (!contact.phone) {
       toast("Este contacto no tiene teléfono guardado");
       return;
@@ -161,6 +205,68 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
       "_blank",
     );
   };
+
+  const handleSuggestGift = async () => {
+    if (!contact) return;
+    setGiftPhase("loading");
+    try {
+      const { data: settingsRow, error: settingsError } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", OPENROUTER_SETTINGS_KEY)
+        .maybeSingle();
+      if (settingsError) throw settingsError;
+      const apiKey = settingsRow?.value;
+      if (!apiKey) throw new Error("missing_api_key");
+
+      const { data: configRow, error: configError } = await supabase
+        .from("ai_config")
+        .select("model, prompt")
+        .eq("feature", "gift_suggestions")
+        .maybeSingle();
+      if (configError) throw configError;
+      if (!configRow?.model || !configRow?.prompt) throw new Error("missing_config");
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: configRow.model,
+          messages: [
+            { role: "system", content: configRow.prompt },
+            {
+              role: "user",
+              content: `Nombre: ${contact.name}. Intereses: ${contact.interests || "no especificados"}`,
+            },
+          ],
+        }),
+      });
+
+      const json = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+        error?: { message?: string };
+      };
+      if (!response.ok) {
+        throw new Error(json.error?.message || "openrouter_error");
+      }
+      const raw = json.choices?.[0]?.message?.content;
+      if (!raw) throw new Error("empty_content");
+
+      const items = parseGiftSuggestionsContent(raw);
+      setGiftItems(items);
+      setGiftPhase("success");
+    } catch {
+      setGiftPhase("error");
+      setGiftItems([]);
+    }
+  };
+
+  if (!contact) return null;
+
+  const giftLoading = giftPhase === "loading";
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -196,6 +302,29 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
               <div>
                 <p className="font-bold text-[#2E2D2C]">WhatsApp</p>
                 <p className="text-xs text-[#717B99]">Mensaje directo personalizado</p>
+              </div>
+            </button>
+
+            {/* Sugerir regalo */}
+            <button
+              type="button"
+              disabled={giftLoading}
+              onClick={() => void handleSuggestGift()}
+              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left transition-opacity hover:opacity-80 disabled:pointer-events-none disabled:opacity-70"
+              style={{ borderLeftColor: "#C6017F", backgroundColor: "#FFF0F9", borderTop: "1px solid #F9E0F3", borderRight: "1px solid #F9E0F3", borderBottom: "1px solid #F9E0F3" }}
+            >
+              <span className="text-2xl">🎁</span>
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-[#2E2D2C]">Sugerir regalo</p>
+                  <p className="text-xs text-[#717B99]">Ideas según sus gustos</p>
+                </div>
+                {giftLoading && (
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[#C6017F]">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generando...
+                  </span>
+                )}
               </div>
             </button>
 
@@ -244,6 +373,39 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
             </button>
 
           </div>
+
+          {giftPhase !== "idle" && (
+            <div className="mt-5 border-t border-[#F2F2F2] pt-5">
+              {giftPhase === "loading" && (
+                <div className="flex flex-col items-center justify-center gap-3 py-6">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#C6017F]" />
+                  <p className="text-sm text-[#717B99]">Generando sugerencias...</p>
+                </div>
+              )}
+              {giftPhase === "error" && (
+                <p className="text-center text-sm text-red-600">No se pudieron generar sugerencias</p>
+              )}
+              {giftPhase === "success" && (
+                <div className="space-y-3">
+                  {giftItems.map((item, i) => (
+                    <div
+                      key={`${item.title}-${i}`}
+                      className="rounded-xl border border-[#F9E0F3] border-l-[3px] bg-[#FFF0F9] p-4"
+                      style={{ borderLeftColor: "#C6017F" }}
+                    >
+                      <p className="font-bold text-[#2E2D2C]">{item.title}</p>
+                      <p className="mt-1 text-sm text-[#717B99]">{item.description}</p>
+                      <span
+                        className="mt-2 inline-block rounded-full bg-[#C6017F] px-3 py-1 text-xs font-semibold text-white"
+                      >
+                        {item.price}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -278,6 +440,17 @@ const DashboardContent = () => {
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [showAdminNav, setShowAdminNav] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setShowAdminNav(user?.email === ADMIN_EMAIL);
+    };
+    void load();
+  }, []);
 
   const openCongratModal = (contact: Contact) => {
     setCongratContact(contact);
@@ -410,14 +583,26 @@ const DashboardContent = () => {
       <header className="fixed inset-x-0 top-0 z-40 border-b border-[#F2F2F2] bg-white">
         <div className="mx-auto flex h-16 w-full max-w-[480px] items-center justify-between px-4">
           <p className="text-xl font-bold lowercase tracking-tight text-[#C6017F]">fiestamas</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-[#717B99] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
-            onClick={handleSignOut}
-          >
-            Cerrar sesión
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-[#717B99] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
+              onClick={handleSignOut}
+            >
+              Cerrar sesión
+            </Button>
+            {showAdminNav && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/admin")}
+                className="border-[#C6017F] text-[#C6017F] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
+              >
+                Admin
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
