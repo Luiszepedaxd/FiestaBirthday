@@ -190,11 +190,14 @@ const AdminContent = () => {
 
   const saveMutation = useMutation({
     mutationFn: async ({ feature, model, prompt }: { feature: string; model: string; prompt: string }) => {
-      const { data: userData } = await supabase.auth.getUser();
-      const { error } = await supabase.from("ai_config").upsert(
-        { feature, model, prompt: prompt || null, updated_by: userData.user?.id },
-        { onConflict: "feature" },
-      );
+      const { error } = await supabase
+        .from("ai_config")
+        .update({
+          model,
+          prompt: prompt || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("feature", feature);
       if (error) throw error;
     },
     onSuccess: async () => {
