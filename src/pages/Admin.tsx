@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,12 +18,14 @@ import { supabase } from "@/lib/supabase";
 
 const ADMIN_EMAIL = "luis.j20000@gmail.com";
 
-const MODELS = [
-  { value: "openai/gpt-4o-mini", label: "GPT-4o Mini (rápido)" },
-  { value: "openai/gpt-4o", label: "GPT-4o (potente)" },
-  { value: "anthropic/claude-3-haiku", label: "Claude 3 Haiku" },
-  { value: "anthropic/claude-3-5-sonnet", label: "Claude 3.5 Sonnet" },
-  { value: "meta-llama/llama-3.1-8b-instruct", label: "Llama 3.1 8B (económico)" },
+const OPENROUTER_SETTINGS_KEY = "openrouter_api_key";
+
+const FALLBACK_MODELS = [
+  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini" },
+  { id: "openai/gpt-4o", name: "GPT-4o" },
+  { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku" },
+  { id: "anthropic/claude-3-5-sonnet", name: "Claude 3.5 Sonnet" },
+  { id: "meta-llama/llama-3.1-8b-instruct", name: "Llama 3.1 8B" },
 ];
 
 const FEATURES = [
@@ -52,7 +58,13 @@ const FEATURES = [
 type AiConfigRow = {
   feature: string;
   model: string;
+  prompt: string | null;
 };
+
+function obfuscateApiKey(key: string): string {
+  if (!key) return "";
+  return `${key.slice(0, 8)}••••••••`;
+}
 
 const adminQueryClient = new QueryClient();
 
@@ -61,7 +73,16 @@ const AdminContent = () => {
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(true);
   const [localModels, setLocalModels] = useState<Record<string, string>>({});
+  const [localPrompts, setLocalPrompts] = useState<Record<string, string>>({});
   const [savingFeature, setSavingFeature] = useState<string | null>(null);
+
+  const [openrouterKeyInput, setOpenrouterKeyInput] = useState("");
+  const [storedOpenrouterKey, setStoredOpenrouterKey] = useState<string | null>(null);
+  const [openrouterKeyDirty, setOpenrouterKeyDirty] = useState(false);
+  const [showOpenrouterKey, setShowOpenrouterKey] = useState(false);
+  const [savingOpenrouterKey, setSavingOpenrouterKey] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     const check = async () => {
@@ -75,13 +96,38 @@ const AdminContent = () => {
     void check();
   }, [navigate]);
 
+  const { data: settingsRow } = useQuery({
+    queryKey: ["settings", OPENROUTER_SETTINGS_KEY],
+    enabled: !checking,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("settings")
+        .select("key, value")
+        .eq("key", OPENROUTER_SETTINGS_KEY)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { key: string; value: string } | null;
+    },
+  });
+
+  useEffect(() => {
+    if (settingsRow === undefined) return;
+    if (settingsRow?.value) {
+      setStoredOpenrouterKey(settingsRow.value);
+      setOpenrouterKeyInput(obfuscateApiKey(settingsRow.value));
+      setOpenrouterKeyDirty(false);
+    } else {
+      setStoredOpenrouterKey(null);
+      setOpenrouterKeyInput("");
+      setOpenrouterKeyDirty(false);
+    }
+  }, [settingsRow]);
+
   const { data: configs = [] } = useQuery<AiConfigRow[]>({
     queryKey: ["ai_config"],
     enabled: !checking,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ai_config")
-        .select("feature, model");
+      const { data, error } = await supabase.from("ai_config").select("feature, model, prompt");
       if (error) throw error;
       return (data ?? []) as AiConfigRow[];
     },
@@ -89,21 +135,69 @@ const AdminContent = () => {
 
   useEffect(() => {
     if (configs.length > 0) {
-      const map: Record<string, string> = {};
-      configs.forEach((row) => { map[row.feature] = row.model; });
-      setLocalModels(map);
+      const models: Record<string, string> = {};
+      const prompts: Record<string, string> = {};
+      configs.forEach((row) => {
+        models[row.feature] = row.model;
+        prompts[row.feature] = row.prompt ?? "";
+      });
+      setLocalModels(models);
+      setLocalPrompts(prompts);
     }
   }, [configs]);
 
-  const saveMutation = useMutation({
-    mutationFn: async ({ feature, model }: { feature: string; model: string }) => {
-      const { data: userData } = await supabase.auth.getUser();
+  const saveOpenrouterKeyMutation = useMutation({
+    mutationFn: async (apiKey: string) => {
       const { error } = await supabase
-        .from("ai_config")
-        .upsert({ feature, model, updated_by: userData.user?.id }, { onConflict: "feature" });
+        .from("settings")
+        .upsert({ key: OPENROUTER_SETTINGS_KEY, value: apiKey }, { onConflict: "key" });
       if (error) throw error;
     },
-    onSuccess: async (_data, variables) => {
+    onSuccess: async () => {
+      toast("API key guardada ✓");
+      await queryClient.invalidateQueries({ queryKey: ["settings", OPENROUTER_SETTINGS_KEY] });
+    },
+    onError: () => {
+      toast("Error al guardar la API key");
+    },
+    onSettled: () => {
+      setSavingOpenrouterKey(false);
+    },
+  });
+
+  const handleSaveOpenrouterKey = () => {
+    let toSave: string;
+    if (openrouterKeyDirty) {
+      toSave = openrouterKeyInput.trim();
+    } else if (storedOpenrouterKey) {
+      toSave = storedOpenrouterKey;
+    } else {
+      toSave = openrouterKeyInput.trim();
+    }
+    if (!toSave) {
+      toast("Introduce una API key");
+      return;
+    }
+    setSavingOpenrouterKey(true);
+    saveOpenrouterKeyMutation.mutate(toSave, {
+      onSuccess: () => {
+        setStoredOpenrouterKey(toSave);
+        setOpenrouterKeyInput(obfuscateApiKey(toSave));
+        setOpenrouterKeyDirty(false);
+      },
+    });
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ feature, model, prompt }: { feature: string; model: string; prompt: string }) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { error } = await supabase.from("ai_config").upsert(
+        { feature, model, prompt: prompt || null, updated_by: userData.user?.id },
+        { onConflict: "feature" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: async () => {
       setSavingFeature(null);
       toast("Modelo actualizado");
       await queryClient.invalidateQueries({ queryKey: ["ai_config"] });
@@ -117,9 +211,54 @@ const AdminContent = () => {
   const handleSave = (feature: string) => {
     const model = localModels[feature];
     if (!model) return;
+    const prompt = localPrompts[feature] ?? "";
     setSavingFeature(feature);
-    saveMutation.mutate({ feature, model });
+    saveMutation.mutate({ feature, model, prompt });
   };
+
+  const modelOptions = availableModels.length > 0 ? availableModels : FALLBACK_MODELS;
+
+  const hasSavedOpenrouterKey = Boolean(storedOpenrouterKey);
+
+  const handleLoadModels = async () => {
+    const key = storedOpenrouterKey;
+    if (!key) return;
+    setLoadingModels(true);
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/models", {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      if (!res.ok) throw new Error();
+      const json = (await res.json()) as { data?: { id: string; name?: string }[] };
+      const arr = json.data ?? [];
+      const list = arr.map((item) => ({
+        id: item.id,
+        name: item.name ?? item.id,
+      }));
+      setAvailableModels(list);
+      toast(`${list.length} modelos cargados ✓`);
+    } catch {
+      toast("Error al cargar modelos");
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  const onOpenrouterInputChange = (v: string) => {
+    setOpenrouterKeyInput(v);
+    setOpenrouterKeyDirty(true);
+  };
+
+  const displayOpenrouterValue = openrouterKeyDirty
+    ? openrouterKeyInput
+    : storedOpenrouterKey
+      ? showOpenrouterKey
+        ? storedOpenrouterKey
+        : obfuscateApiKey(storedOpenrouterKey)
+      : openrouterKeyInput;
+
+  const openrouterInputType =
+    openrouterKeyDirty && !showOpenrouterKey ? "password" : "text";
 
   if (checking) {
     return (
@@ -153,6 +292,52 @@ const AdminContent = () => {
           Configura el modelo de IA para cada feature
         </p>
 
+        {/* OpenRouter */}
+        <div className="mt-6 rounded-xl border border-[#E5E5E5] bg-white p-4">
+          <div className="flex items-center gap-2">
+            <p className="text-base font-bold text-[#2E2D2C]">OpenRouter</p>
+            <span aria-hidden>🔑</span>
+          </div>
+          <p className="mt-1 text-sm text-[#717B99]">Tu API key para acceder a los modelos de IA</p>
+
+          <div className="relative mt-3">
+            <Input
+              type={openrouterInputType}
+              placeholder="sk-or-..."
+              value={displayOpenrouterValue}
+              onChange={(e) => onOpenrouterInputChange(e.target.value)}
+              className="h-11 w-full rounded-[12px] border-[#E5E5E5] pr-11 text-sm focus-visible:border-[#C6017F] focus-visible:ring-[#C6017F]"
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[#717B99] hover:bg-[#F5F5F5]"
+              onClick={() => setShowOpenrouterKey((s) => !s)}
+              aria-label={showOpenrouterKey ? "Ocultar API key" : "Mostrar API key"}
+            >
+              {showOpenrouterKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+
+          <Button
+            type="button"
+            disabled={savingOpenrouterKey || saveOpenrouterKeyMutation.isPending}
+            onClick={handleSaveOpenrouterKey}
+            className="mt-3 h-11 w-full rounded-[12px] bg-[#C6017F] text-white hover:bg-[#B10072]"
+          >
+            {savingOpenrouterKey || saveOpenrouterKeyMutation.isPending ? "Guardando..." : "Guardar key"}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!hasSavedOpenrouterKey || loadingModels}
+            onClick={() => void handleLoadModels()}
+            className="mt-3 h-11 w-full rounded-[12px] border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
+          >
+            {loadingModels ? "Cargando..." : "Cargar modelos disponibles"}
+          </Button>
+        </div>
+
         <div className="mt-6 space-y-4">
           {FEATURES.map((feature) => (
             <div
@@ -175,19 +360,33 @@ const AdminContent = () => {
                       <SelectValue placeholder="Selecciona un modelo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {MODELS.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          {m.label}
+                      {modelOptions.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
 
+                  <Label htmlFor={`prompt-${feature.key}`} className="text-[12px] text-[#717B99]">
+                    Prompt del sistema
+                  </Label>
+                  <Textarea
+                    id={`prompt-${feature.key}`}
+                    rows={4}
+                    placeholder="Eres un asistente que sugiere regalos..."
+                    value={localPrompts[feature.key] ?? ""}
+                    onChange={(e) =>
+                      setLocalPrompts((prev) => ({ ...prev, [feature.key]: e.target.value }))
+                    }
+                    className="mt-1 text-[13px] rounded-[12px] border-[#E5E5E5] focus-visible:border-[#C6017F] focus-visible:ring-[#C6017F]"
+                  />
+
                   <Button
                     size="sm"
                     disabled={savingFeature === feature.key || !localModels[feature.key]}
                     onClick={() => handleSave(feature.key)}
-                    className="rounded-xl bg-[#C6017F] px-4 text-white hover:bg-[#B10072]"
+                    className="mt-3 rounded-xl bg-[#C6017F] px-4 text-white hover:bg-[#B10072]"
                   >
                     {savingFeature === feature.key ? "Guardando..." : "Guardar"}
                   </Button>
