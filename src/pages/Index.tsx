@@ -1,37 +1,42 @@
-import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
-const Index = () => {
+export default function Index() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <main className="flex w-full max-w-md flex-col items-center text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">Fiestamas</h1>
-          <p className="mt-3 text-base text-muted-foreground">Nunca olvides un cumpleaños importante</p>
-          <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button
-              variant="default"
-              size="lg"
-              className="w-full sm:w-auto"
-              onClick={() => navigate("/auth", { state: { tab: "register" } })}
-            >
-              Crear cuenta
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full sm:w-auto"
-              onClick={() => navigate("/auth", { state: { tab: "login" } })}
-            >
-              Iniciar sesión
-            </Button>
-          </div>
-        </main>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
+      <div className="flex flex-col items-center gap-6 max-w-md w-full text-center">
+        
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-5xl">🎂</span>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">
+            Fiestamas
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Nunca olvides un cumpleaños importante
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3 w-full">
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={() => navigate("/auth?tab=register")}
+          >
+            Crear cuenta
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="w-full"
+            onClick={() => navigate("/auth?tab=login")}
+          >
+            Iniciar sesión
+          </Button>
+        </div>
+
       </div>
     </div>
   );
-};
-
-export default Index;
+}
