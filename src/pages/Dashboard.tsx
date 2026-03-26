@@ -57,6 +57,12 @@ type FormMode = "create" | "edit";
 const formatBirthday = (birthday: string) =>
   new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "long" }).format(new Date(birthday));
 
+const parseBirthday = (birthday: string) => {
+  if (!birthday) return undefined;
+  const [year, month, day] = birthday.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const getInitials = (name: string) =>
   name
     .split(" ")
@@ -294,7 +300,7 @@ const DashboardContent = () => {
     if (formMode !== "edit" || !selectedContact) return;
     reset({
       name: selectedContact.name,
-      birthday: new Date(`${selectedContact.birthday}T12:00:00`),
+      birthday: parseBirthday(selectedContact.birthday),
       phone: selectedContact.phone || "",
       interests: selectedContact.interests || "",
     });
