@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -54,83 +54,87 @@ const formatDaysBadge = (days: number) => {
   return `en ${days} días`;
 };
 
-const buildNextBirthdayMs = (birthday: string): number => {
+const getDaysUntil = (birthday: string): number => {
   const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const parsed = new Date(birthday);
   const month = parsed.getMonth();
   const day = parsed.getDate();
-  const year = now.getFullYear();
-  const candidate = new Date(year, month, day, 0, 0, 0, 0);
-  if (candidate.getTime() < new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) {
-    candidate.setFullYear(year + 1);
+  const candidate = new Date(now.getFullYear(), month, day);
+  if (candidate.getTime() < today.getTime()) {
+    candidate.setFullYear(now.getFullYear() + 1);
   }
-  return candidate.getTime();
+  return Math.round((candidate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 };
 
-type Countdown = {
+type ContactCardProps = {
+  contact: Contact;
   days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
-  isToday: boolean;
+  badgeBg: string;
+  badgeText: string;
+  badgeLabel: string;
+  avatarBg: string;
+  onAction: () => void;
 };
 
-const calcCountdown = (birthday: string): Countdown => {
-  const now = Date.now();
-  const target = buildNextBirthdayMs(birthday);
-  const diffMs = target - now;
-  if (diffMs <= 0) {
-    return { days: 0, hours: 0, minutes: 0, seconds: 0, isToday: true };
-  }
-  const totalSeconds = Math.floor(diffMs / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const isToday = days === 0 && hours === 0 && minutes === 0;
-  return { days, hours, minutes, seconds, isToday };
-};
+const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onAction }: ContactCardProps) => (
+  <div className="flex items-center gap-3 rounded-2xl border border-[#F2F2F2] bg-white p-4">
+    <div
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+      style={{ backgroundColor: avatarBg }}
+    >
+      {getInitials(contact.name)}
+    </div>
 
-const useCountdown = (birthday: string): Countdown => {
-  const [countdown, setCountdown] = useState<Countdown>(() => calcCountdown(birthday));
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCountdown(calcCountdown(birthday));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [birthday]);
-
-  return countdown;
-};
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
-const CountdownBadge = ({ birthday, daysUntil }: { birthday: string; daysUntil: number }) => {
-  const { days, hours, minutes, seconds, isToday } = useCountdown(birthday);
-
-  if (isToday || daysUntil === 0) {
-    return (
+    <div className="min-w-0 flex-1">
+      <p className="truncate font-bold text-[#2E2D2C]">{contact.name}</p>
+      <p className="text-xs text-[#717B99]">{formatBirthday(contact.birthday)}</p>
       <span
-        className="text-sm font-bold text-[#C6017F]"
-        style={{ animation: "pulse-scale 1s ease-in-out infinite", display: "inline-block" }}
+        className="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold"
+        style={{ backgroundColor: badgeBg, color: badgeText }}
       >
-        ¡Hoy! 🎂
+        {badgeLabel}
       </span>
-    );
-  }
+    </div>
 
-  return (
-    <span className="font-mono text-[13px] font-bold text-[#C6017F]">
-      {days}d {pad2(hours)}h {pad2(minutes)}m {pad2(seconds)}s
-    </span>
-  );
-};
+    <div className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={onAction}
+        className="rounded-full border border-[#C6017F] px-3 py-1 text-xs font-semibold text-[#C6017F] hover:bg-[#FFF0F9]"
+      >
+        Felicitar 🎉
+      </button>
+      <button
+        type="button"
+        onClick={onAction}
+        className="flex h-8 w-8 items-center justify-center rounded-full text-[#717B99] hover:bg-[#F5F5F5]"
+      >
+        <MoreHorizontal size={18} />
+      </button>
+    </div>
+  </div>
+);
 
 const DashboardContent = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { isLoading, isError, error, todayBirthdays, upcomingWeekBirthdays, orderedContacts } = useContacts();
+  const { isLoading, isError, error, orderedContacts } = useContacts();
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+
+  const todayContacts = orderedContacts.filter((c) => getDaysUntil(c.birthday) === 0);
+  const thisMonthContacts = orderedContacts.filter((c) => {
+    const days = getDaysUntil(c.birthday);
+    const parsed = new Date(c.birthday);
+    return days > 0 && parsed.getMonth() === currentMonth;
+  });
+  const upcomingContacts = orderedContacts.filter((c) => {
+    const days = getDaysUntil(c.birthday);
+    const parsed = new Date(c.birthday);
+    return days > 0 && parsed.getMonth() !== currentMonth;
+  });
   const [isFormDrawerOpen, setIsFormDrawerOpen] = useState(false);
   const [isActionsDrawerOpen, setIsActionsDrawerOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -325,61 +329,71 @@ const DashboardContent = () => {
               );
             })()}
 
-            <section className="space-y-3">
-              <h2 className="text-base font-bold text-[#2E2D2C]">Esta semana 🎂</h2>
-              {upcomingWeekBirthdays.length === 0 ? (
-                <p className="rounded-2xl bg-[#FAFAFA] p-5 text-center text-sm text-[#717B99]">
-                  Nadie cumple esta semana 🎉
-                </p>
-              ) : (
+            {todayContacts.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="text-base font-bold text-[#2E2D2C]">Hoy 🎂</h2>
                 <div className="space-y-3">
-                  {upcomingWeekBirthdays.map((contact) => (
-                    <div
+                  {todayContacts.map((contact) => (
+                    <ContactCard
                       key={contact.id}
-                      className="flex items-center gap-3 rounded-2xl border border-[#F2F2F2] bg-white p-4"
-                    >
-                      {/* Iniciales */}
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#C6017F] text-sm font-bold text-white">
-                        {getInitials(contact.name)}
-                      </div>
-
-                      {/* Centro */}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold text-[#2E2D2C]">{contact.name}</p>
-                        <p className="text-xs text-[#717B99]">{formatBirthday(contact.birthday)}</p>
-                        <div className="mt-1">
-                          <CountdownBadge birthday={contact.birthday} daysUntil={contact.daysUntilBirthday} />
-                        </div>
-                      </div>
-
-                      {/* Acciones */}
-                      <div className="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedContact(contact);
-                            setIsActionsDrawerOpen(true);
-                          }}
-                          className="rounded-full border border-[#C6017F] px-3 py-1 text-xs font-semibold text-[#C6017F] hover:bg-[#FFF0F9]"
-                        >
-                          Felicitar 🎉
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedContact(contact);
-                            setIsActionsDrawerOpen(true);
-                          }}
-                          className="flex h-8 w-8 items-center justify-center rounded-full text-[#717B99] hover:bg-[#F5F5F5]"
-                        >
-                          <MoreHorizontal size={18} />
-                        </button>
-                      </div>
-                    </div>
+                      contact={contact}
+                      days={0}
+                      badgeBg="#C6017F"
+                      badgeText="white"
+                      badgeLabel="¡Hoy!"
+                      avatarBg="#C6017F"
+                      onAction={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                    />
                   ))}
                 </div>
-              )}
-            </section>
+              </section>
+            )}
+
+            {thisMonthContacts.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="text-base font-bold text-[#2E2D2C]">Este mes 🎉</h2>
+                <div className="space-y-3">
+                  {thisMonthContacts.map((contact) => {
+                    const days = getDaysUntil(contact.birthday);
+                    return (
+                      <ContactCard
+                        key={contact.id}
+                        contact={contact}
+                        days={days}
+                        badgeBg="#FFF0F9"
+                        badgeText="#C6017F"
+                        badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
+                        avatarBg="#C6017F"
+                        onAction={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {upcomingContacts.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="text-base font-bold text-[#2E2D2C]">Próximos 📅</h2>
+                <div className="space-y-3">
+                  {upcomingContacts.map((contact) => {
+                    const days = getDaysUntil(contact.birthday);
+                    return (
+                      <ContactCard
+                        key={contact.id}
+                        contact={contact}
+                        days={days}
+                        badgeBg="#F5F5F5"
+                        badgeText="#717B99"
+                        badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
+                        avatarBg="#C6017F"
+                        onAction={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <section className="space-y-3">
               <h2 className="text-base font-bold text-[#2E2D2C]">Tus contactos</h2>
