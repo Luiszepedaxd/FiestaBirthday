@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, X } from "lucide-react";
+import { CalendarIcon, MoreHorizontal } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,11 +26,14 @@ import {
 import { toast } from "@/components/ui/sonner";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { es } from "date-fns/locale";
+import { format } from "date-fns";
 import { supabase } from "@/lib/supabase";
 import { type Contact, useContacts } from "@/hooks/useContacts";
 
@@ -124,6 +127,51 @@ const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onCong
   </div>
 );
 
+type BirthdayPickerProps = {
+  value: string;
+  onChange: (val: string) => void;
+};
+
+const BirthdayPicker = ({ value, onChange }: BirthdayPickerProps) => {
+  const [open, setOpen] = useState(false);
+  const selected = value ? new Date(value + "T12:00:00") : undefined;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-12 w-full items-center gap-2 rounded-xl border border-[#E5E5E5] bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+        >
+          <CalendarIcon size={16} className="shrink-0 text-[#717B99]" />
+          <span className={selected ? "text-foreground" : "text-[#717B99]"}>
+            {selected
+              ? format(selected, "d 'de' MMMM 'de' yyyy", { locale: es })
+              : "Selecciona una fecha"}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => {
+            if (date) {
+              onChange(format(date, "yyyy-MM-dd"));
+              setOpen(false);
+            }
+          }}
+          locale={es}
+          captionLayout="dropdown-buttons"
+          fromYear={1920}
+          toYear={new Date().getFullYear()}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 type CongratModalProps = {
   contact: Contact | null;
   open: boolean;
@@ -154,9 +202,6 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
 
         {/* Header */}
         <div className="relative flex flex-col items-center px-6 pb-4 pt-10 text-center">
-          <DialogClose className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#F5F5F5] text-[#717B99] hover:bg-[#EBEBEB]">
-            <X size={16} />
-          </DialogClose>
           <div
             className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold text-white"
             style={{ backgroundColor: "#C6017F" }}
@@ -353,7 +398,7 @@ const DashboardContent = () => {
     navigate("/");
   };
 
-  const openCreateDrawer = () => {
+  const openCreateDialog = () => {
     setSubmitError(null);
     setFormMode("create");
     setSelectedContact(null);
@@ -565,63 +610,65 @@ const DashboardContent = () => {
       <Button
         size="icon"
         className="fixed bottom-6 right-6 z-30 h-14 w-14 rounded-full bg-[#C6017F] text-3xl text-white shadow-[0_4px_20px_rgba(198,1,127,0.4)] hover:bg-[#B10072]"
-        onClick={openCreateDrawer}
+        onClick={openCreateDialog}
       >
         +
       </Button>
 
-      <Drawer open={isFormDrawerOpen} onOpenChange={setIsFormDrawerOpen}>
-        <DrawerContent className="rounded-t-2xl">
-          <DrawerHeader>
-            <DrawerTitle className="font-bold text-[#2E2D2C]">
+      <Dialog open={isFormDrawerOpen} onOpenChange={setIsFormDrawerOpen}>
+        <DialogContent className="w-full h-full max-w-full m-0 rounded-none sm:rounded-2xl sm:max-w-md sm:h-auto sm:m-auto overflow-y-auto p-0">
+          <DialogTitle className="sr-only">
+            {formMode === "create" ? "Nuevo contacto" : "Editar contacto"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {formMode === "create"
+              ? "Completa los datos para guardar el contacto."
+              : "Actualiza la información del contacto seleccionado."}
+          </DialogDescription>
+          <div className="px-6 pb-8 pt-10">
+            <h2 className="mb-1 text-xl font-bold text-[#2E2D2C]">
               {formMode === "create" ? "Nuevo contacto" : "Editar contacto"}
-            </DrawerTitle>
-            <DrawerDescription className="text-[#717B99]">
+            </h2>
+            <p className="mb-6 text-sm text-[#717B99]">
               {formMode === "create"
                 ? "Completa los datos para guardar el contacto."
                 : "Actualiza la información del contacto seleccionado."}
-            </DrawerDescription>
-          </DrawerHeader>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-4 pb-6">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-[#2E2D2C]">
-                Nombre
-              </Label>
-              <Input
-                id="name"
-                className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
-                {...form.register("name")}
-              />
-              {form.formState.errors.name && (
-                <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="birthday" className="text-[#2E2D2C]">
-                Fecha de cumpleaños
-              </Label>
-              <Input
-                id="birthday"
-                type="date"
-                className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
-                {...form.register("birthday")}
-              />
-              {form.formState.errors.birthday && (
-                <p className="text-sm text-destructive">{form.formState.errors.birthday.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone" className="text-[#2E2D2C]">
-                Teléfono (opcional)
-              </Label>
-              <Input
-                id="phone"
-                className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
-                {...form.register("phone")}
-              />
-            </div>
-            {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-            <DrawerFooter className="px-0 pb-0">
+            </p>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-[#2E2D2C]">Nombre</Label>
+                <Input
+                  id="name"
+                  className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+                  {...form.register("name")}
+                />
+                {form.formState.errors.name && (
+                  <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[#2E2D2C]">Fecha de cumpleaños</Label>
+                <BirthdayPicker
+                  value={form.watch("birthday")}
+                  onChange={(val) => form.setValue("birthday", val, { shouldValidate: true })}
+                />
+                {form.formState.errors.birthday && (
+                  <p className="text-sm text-destructive">{form.formState.errors.birthday.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="text-[#2E2D2C]">Teléfono (opcional)</Label>
+                <Input
+                  id="phone"
+                  className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+                  {...form.register("phone")}
+                />
+              </div>
+
+              {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
               <Button
                 type="submit"
                 disabled={saveContactMutation.isPending}
@@ -629,15 +676,18 @@ const DashboardContent = () => {
               >
                 {saveContactMutation.isPending ? "Guardando..." : "Guardar"}
               </Button>
-              <DrawerClose asChild>
-                <Button variant="outline" type="button">
-                  Cancelar
-                </Button>
-              </DrawerClose>
-            </DrawerFooter>
-          </form>
-        </DrawerContent>
-      </Drawer>
+              <Button
+                variant="outline"
+                type="button"
+                className="h-12 w-full rounded-xl"
+                onClick={() => setIsFormDrawerOpen(false)}
+              >
+                Cancelar
+              </Button>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Drawer open={isActionsDrawerOpen} onOpenChange={setIsActionsDrawerOpen}>
         <DrawerContent className="rounded-t-2xl">
