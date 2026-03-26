@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +24,13 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { toast } from "@/components/ui/sonner";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
 import { type Contact, useContacts } from "@/hooks/useContacts";
 
@@ -74,10 +81,11 @@ type ContactCardProps = {
   badgeText: string;
   badgeLabel: string;
   avatarBg: string;
-  onAction: () => void;
+  onCongrat: () => void;
+  onActions: () => void;
 };
 
-const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onAction }: ContactCardProps) => (
+const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onCongrat, onActions }: ContactCardProps) => (
   <div className="flex items-center gap-3 rounded-2xl border border-[#F2F2F2] bg-white p-4">
     <div
       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
@@ -100,14 +108,14 @@ const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onActi
     <div className="flex shrink-0 items-center gap-1">
       <button
         type="button"
-        onClick={onAction}
+        onClick={onCongrat}
         className="rounded-full border border-[#C6017F] px-3 py-1 text-xs font-semibold text-[#C6017F] hover:bg-[#FFF0F9]"
       >
         Felicitar 🎉
       </button>
       <button
         type="button"
-        onClick={onAction}
+        onClick={onActions}
         className="flex h-8 w-8 items-center justify-center rounded-full text-[#717B99] hover:bg-[#F5F5F5]"
       >
         <MoreHorizontal size={18} />
@@ -115,6 +123,119 @@ const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onActi
     </div>
   </div>
 );
+
+type CongratModalProps = {
+  contact: Contact | null;
+  open: boolean;
+  onClose: () => void;
+};
+
+const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
+  if (!contact) return null;
+
+  const handleWhatsApp = () => {
+    if (!contact.phone) {
+      toast("Este contacto no tiene teléfono guardado");
+      return;
+    }
+    const phone = contact.phone.replace(/[\s\-]/g, "");
+    const name = encodeURIComponent(contact.name);
+    window.open(
+      `https://wa.me/52${phone}?text=¡Hola%20${name}!%20🎂%20¡Feliz%20cumpleaños!%20Espero%20que%20tengas%20un%20día%20increíble%20🎉`,
+      "_blank",
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="w-full h-full max-w-full m-0 rounded-none sm:rounded-2xl sm:max-w-md sm:h-auto sm:m-auto overflow-y-auto p-0">
+        <DialogTitle className="sr-only">Felicitar a {contact.name}</DialogTitle>
+        <DialogDescription className="sr-only">Elige cómo quieres felicitar a {contact.name}</DialogDescription>
+
+        {/* Header */}
+        <div className="relative flex flex-col items-center px-6 pb-4 pt-10 text-center">
+          <DialogClose className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#F5F5F5] text-[#717B99] hover:bg-[#EBEBEB]">
+            <X size={16} />
+          </DialogClose>
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold text-white"
+            style={{ backgroundColor: "#C6017F" }}
+          >
+            {getInitials(contact.name)}
+          </div>
+          <p className="mt-3 text-2xl font-bold text-[#2E2D2C]">{contact.name}</p>
+          <p className="mt-1 text-sm text-[#717B99]">Cumpleaños: {formatBirthday(contact.birthday)}</p>
+        </div>
+
+        {/* Actions */}
+        <div className="px-6 pb-8">
+          <p className="mb-3 text-[14px] text-[#717B99]">¿Cómo quieres felicitar?</p>
+          <div className="space-y-3">
+
+            {/* WhatsApp */}
+            <button
+              type="button"
+              onClick={handleWhatsApp}
+              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left transition-opacity hover:opacity-80"
+              style={{ borderLeftColor: "#25D366", backgroundColor: "#F0FFF4", borderTop: "1px solid #E5F9EE", borderRight: "1px solid #E5F9EE", borderBottom: "1px solid #E5F9EE" }}
+            >
+              <span className="text-2xl">💬</span>
+              <div>
+                <p className="font-bold text-[#2E2D2C]">WhatsApp</p>
+                <p className="text-xs text-[#717B99]">Mensaje directo personalizado</p>
+              </div>
+            </button>
+
+            {/* Canción IA */}
+            <div
+              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left"
+              style={{ borderLeftColor: "#C6017F", backgroundColor: "#FFF0F9", borderTop: "1px solid #F9E0F3", borderRight: "1px solid #F9E0F3", borderBottom: "1px solid #F9E0F3", opacity: 0.6 }}
+            >
+              <span className="text-2xl">🎵</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-[#2E2D2C]">Canción con IA</p>
+                  <span className="rounded-full bg-[#E5E5E5] px-2 py-0.5 text-[10px] font-semibold text-[#717B99]">Próximamente</span>
+                </div>
+                <p className="text-xs text-[#717B99]">Letra personalizada con sus gustos</p>
+              </div>
+            </div>
+
+            {/* Video IA */}
+            <div
+              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left"
+              style={{ borderLeftColor: "#5221D6", backgroundColor: "#F0F0FF", borderTop: "1px solid #E3E0F9", borderRight: "1px solid #E3E0F9", borderBottom: "1px solid #E3E0F9", opacity: 0.6 }}
+            >
+              <span className="text-2xl">🎬</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-[#2E2D2C]">Video de felicitación</p>
+                  <span className="rounded-full bg-[#E5E5E5] px-2 py-0.5 text-[10px] font-semibold text-[#717B99]">Próximamente</span>
+                </div>
+                <p className="text-xs text-[#717B99]">Video único generado con IA</p>
+              </div>
+            </div>
+
+            {/* Organizar fiesta */}
+            <button
+              type="button"
+              onClick={() => window.open("https://fiestamas.com/c", "_blank")}
+              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left transition-opacity hover:opacity-80"
+              style={{ borderLeftColor: "#F59E0B", backgroundColor: "#FFFBF0", borderTop: "1px solid #FEF3D0", borderRight: "1px solid #FEF3D0", borderBottom: "1px solid #FEF3D0" }}
+            >
+              <span className="text-2xl">🎉</span>
+              <div>
+                <p className="font-bold text-[#2E2D2C]">Organizar fiesta</p>
+                <p className="text-xs text-[#717B99]">Salón, música, decoración y más</p>
+              </div>
+            </button>
+
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const DashboardContent = () => {
   const navigate = useNavigate();
@@ -138,9 +259,16 @@ const DashboardContent = () => {
   });
   const [isFormDrawerOpen, setIsFormDrawerOpen] = useState(false);
   const [isActionsDrawerOpen, setIsActionsDrawerOpen] = useState(false);
+  const [isCongratModalOpen, setIsCongratModalOpen] = useState(false);
+  const [congratContact, setCongratContact] = useState<Contact | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const openCongratModal = (contact: Contact) => {
+    setCongratContact(contact);
+    setIsCongratModalOpen(true);
+  };
 
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
@@ -312,7 +440,7 @@ const DashboardContent = () => {
                       <p className="text-[32px] font-bold leading-tight text-white">{heroContact.name}</p>
                       <button
                         type="button"
-                        onClick={() => console.log("felicitar", heroContact)}
+                        onClick={() => openCongratModal(heroContact)}
                         className="mt-3 font-semibold text-white"
                         style={{
                           backgroundColor: "#C6017F",
@@ -343,7 +471,8 @@ const DashboardContent = () => {
                       badgeText="white"
                       badgeLabel="¡Hoy!"
                       avatarBg="#C6017F"
-                      onAction={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                      onCongrat={() => openCongratModal(contact)}
+                      onActions={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
                     />
                   ))}
                 </div>
@@ -365,7 +494,8 @@ const DashboardContent = () => {
                         badgeText="#C6017F"
                         badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
                         avatarBg="#C6017F"
-                        onAction={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                        onCongrat={() => openCongratModal(contact)}
+                        onActions={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
                       />
                     );
                   })}
@@ -388,7 +518,8 @@ const DashboardContent = () => {
                         badgeText="#717B99"
                         badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
                         avatarBg="#C6017F"
-                        onAction={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                        onCongrat={() => openCongratModal(contact)}
+                        onActions={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
                       />
                     );
                   })}
@@ -583,6 +714,12 @@ const DashboardContent = () => {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      <CongratModal
+        contact={congratContact}
+        open={isCongratModalOpen}
+        onClose={() => setIsCongratModalOpen(false)}
+      />
     </div>
   );
 };
