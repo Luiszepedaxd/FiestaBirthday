@@ -1,9 +1,356 @@
-const Dashboard = () => {
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { supabase } from "@/lib/supabase";
+import { type Contact, useContacts } from "@/hooks/useContacts";
+
+const dashboardQueryClient = new QueryClient();
+
+const contactSchema = z.object({
+  name: z.string().min(1, "El nombre es obligatorio"),
+  birthday: z.string().min(1, "La fecha de cumpleaños es obligatoria"),
+  phone: z.string().optional(),
+});
+
+type ContactFormValues = z.infer<typeof contactSchema>;
+type FormMode = "create" | "edit";
+
+const formatBirthday = (birthday: string) =>
+  new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "long" }).format(new Date(birthday));
+
+const formatDaysBadge = (days: number) => {
+  if (days === 1) return "en 1 día";
+  return `en ${days} días`;
+};
+
+const DashboardContent = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isLoading, isError, error, todayBirthdays, upcomingWeekBirthdays, orderedContacts } = useContacts();
+  const [isFormDrawerOpen, setIsFormDrawerOpen] = useState(false);
+  const [isActionsDrawerOpen, setIsActionsDrawerOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [formMode, setFormMode] = useState<FormMode>("create");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const form = useForm<ContactFormValues>({
+    resolver: zodResolver(contactSchema),
+    defaultValues: {
+      name: "",
+      birthday: "",
+      phone: "",
+    },
+  });
+
+  const saveContactMutation = useMutation({
+    mutationFn: async (values: ContactFormValues) => {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("No hay usuario autenticado");
+
+      const payload = {
+        name: values.name.trim(),
+        birthday: values.birthday,
+        phone: values.phone?.trim() || null,
+      };
+
+      if (formMode === "edit" && selectedContact) {
+        const { error: updateError } = await supabase
+          .from("contacts")
+          .update(payload)
+          .eq("id", selectedContact.id)
+          .eq("user_id", user.id);
+        if (updateError) throw updateError;
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("contacts").insert({
+        ...payload,
+        user_id: user.id,
+      });
+
+      if (insertError) throw insertError;
+    },
+    onSuccess: async () => {
+      setIsFormDrawerOpen(false);
+      setSelectedContact(null);
+      form.reset();
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+    onError: (mutationError) => {
+      setSubmitError(mutationError instanceof Error ? mutationError.message : "Error al guardar el contacto");
+    },
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: async (contactId: string) => {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) throw new Error("No hay usuario autenticado");
+
+      const { error: deleteError } = await supabase
+        .from("contacts")
+        .delete()
+        .eq("id", contactId)
+        .eq("user_id", user.id);
+
+      if (deleteError) throw deleteError;
+    },
+    onSuccess: async () => {
+      setIsActionsDrawerOpen(false);
+      setSelectedContact(null);
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+  });
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
+
+  const openCreateDrawer = () => {
+    setSubmitError(null);
+    setFormMode("create");
+    setSelectedContact(null);
+    form.reset({ name: "", birthday: "", phone: "" });
+    setIsFormDrawerOpen(true);
+  };
+
+  const openEditDrawer = () => {
+    if (!selectedContact) return;
+    setSubmitError(null);
+    setFormMode("edit");
+    form.reset({
+      name: selectedContact.name,
+      birthday: selectedContact.birthday,
+      phone: selectedContact.phone ?? "",
+    });
+    setIsActionsDrawerOpen(false);
+    setIsFormDrawerOpen(true);
+  };
+
+  const onSubmit = (values: ContactFormValues) => {
+    setSubmitError(null);
+    saveContactMutation.mutate(values);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
-      Dashboard - próximamente
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between px-4">
+          <p className="text-lg font-bold tracking-tight">Fiestamas</p>
+          <Button variant="outline" size="sm" onClick={handleSignOut}>
+            Cerrar sesión
+          </Button>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-3xl space-y-8 px-4 pb-24 pt-20">
+        {isLoading && (
+          <section className="space-y-3">
+            <Skeleton className="h-6 w-28" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+          </section>
+        )}
+
+        {isError && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            Error al cargar contactos: {error instanceof Error ? error.message : "Error desconocido"}
+          </div>
+        )}
+
+        {!isLoading && !isError && (
+          <>
+            {todayBirthdays.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="text-xl font-semibold">Hoy 🎂</h2>
+                {todayBirthdays.map((contact) => (
+                  <div
+                    key={contact.id}
+                    className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-sm"
+                  >
+                    <p className="text-sm opacity-90">Hoy cumple años</p>
+                    <p className="mt-1 text-2xl font-bold">{contact.name}</p>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            <section className="space-y-3">
+              <h2 className="text-xl font-semibold">Esta semana</h2>
+              {upcomingWeekBirthdays.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                  Nadie cumple esta semana 🎉
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {upcomingWeekBirthdays.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="flex items-center justify-between rounded-xl border border-border bg-card p-4"
+                    >
+                      <div>
+                        <p className="font-medium">{contact.name}</p>
+                        <p className="text-sm text-muted-foreground">{formatBirthday(contact.birthday)}</p>
+                      </div>
+                      <Badge variant="secondary">{formatDaysBadge(contact.daysUntilBirthday)}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-xl font-semibold">Tus contactos</h2>
+              {orderedContacts.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                  Aún no tienes contactos, agrega el primero 👇
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {orderedContacts.map((contact) => (
+                    <button
+                      type="button"
+                      key={contact.id}
+                      onClick={() => {
+                        setSelectedContact(contact);
+                        setIsActionsDrawerOpen(true);
+                      }}
+                      className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-secondary/60"
+                    >
+                      <p className="font-medium">{contact.name}</p>
+                      <p className="text-sm text-muted-foreground">{contact.phone || "Sin teléfono"}</p>
+                      <p className="text-sm text-muted-foreground">{formatBirthday(contact.birthday)}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </main>
+
+      <Button
+        size="icon"
+        className="fixed bottom-6 right-6 z-30 h-14 w-14 rounded-full text-3xl"
+        onClick={openCreateDrawer}
+      >
+        +
+      </Button>
+
+      <Drawer open={isFormDrawerOpen} onOpenChange={setIsFormDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>{formMode === "create" ? "Nuevo contacto" : "Editar contacto"}</DrawerTitle>
+            <DrawerDescription>
+              {formMode === "create"
+                ? "Completa los datos para guardar el contacto."
+                : "Actualiza la información del contacto seleccionado."}
+            </DrawerDescription>
+          </DrawerHeader>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-4 pb-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nombre</Label>
+              <Input id="name" {...form.register("name")} />
+              {form.formState.errors.name && (
+                <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="birthday">Fecha de cumpleaños</Label>
+              <Input id="birthday" type="date" {...form.register("birthday")} />
+              {form.formState.errors.birthday && (
+                <p className="text-sm text-destructive">{form.formState.errors.birthday.message}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Teléfono (opcional)</Label>
+              <Input id="phone" {...form.register("phone")} />
+            </div>
+            {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+            <DrawerFooter className="px-0 pb-0">
+              <Button type="submit" disabled={saveContactMutation.isPending}>
+                {saveContactMutation.isPending ? "Guardando..." : "Guardar"}
+              </Button>
+              <DrawerClose asChild>
+                <Button variant="outline" type="button">
+                  Cancelar
+                </Button>
+              </DrawerClose>
+            </DrawerFooter>
+          </form>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer open={isActionsDrawerOpen} onOpenChange={setIsActionsDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>{selectedContact?.name}</DrawerTitle>
+            <DrawerDescription>Selecciona una acción para este contacto.</DrawerDescription>
+          </DrawerHeader>
+          <DrawerFooter>
+            <Button type="button" onClick={openEditDrawer}>
+              Editar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!selectedContact || deleteContactMutation.isPending}
+              onClick={() => {
+                if (!selectedContact) return;
+                deleteContactMutation.mutate(selectedContact.id);
+              }}
+            >
+              {deleteContactMutation.isPending ? "Eliminando..." : "Eliminar"}
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline" type="button">
+                Cerrar
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 };
+
+const Dashboard = () => (
+  <QueryClientProvider client={dashboardQueryClient}>
+    <DashboardContent />
+  </QueryClientProvider>
+);
 
 export default Dashboard;
