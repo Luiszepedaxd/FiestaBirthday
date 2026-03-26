@@ -127,50 +127,6 @@ const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onCong
   </div>
 );
 
-type BirthdayPickerProps = {
-  value: string;
-  onChange: (val: string) => void;
-};
-
-const BirthdayPicker = ({ value, onChange }: BirthdayPickerProps) => {
-  const [open, setOpen] = useState(false);
-  const selected = value ? new Date(value + "T12:00:00") : undefined;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex h-12 w-full items-center gap-2 rounded-xl border border-[#E5E5E5] bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C6017F]"
-        >
-          <CalendarIcon size={16} className="shrink-0 text-[#717B99]" />
-          <span className={selected ? "text-foreground" : "text-[#717B99]"}>
-            {selected
-              ? format(selected, "d 'de' MMMM 'de' yyyy", { locale: es })
-              : "Selecciona una fecha"}
-          </span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={selected}
-          onSelect={(date) => {
-            if (date) {
-              onChange(format(date, "yyyy-MM-dd"));
-              setOpen(false);
-            }
-          }}
-          locale={es}
-          captionLayout="dropdown-buttons"
-          fromYear={1920}
-          toYear={new Date().getFullYear()}
-          initialFocus
-        />
-      </PopoverContent>
-    </Popover>
-  );
-};
 
 type CongratModalProps = {
   contact: Contact | null;
@@ -309,6 +265,8 @@ const DashboardContent = () => {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [birthdayValue, setBirthdayValue] = useState<Date | undefined>(undefined);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const openCongratModal = (contact: Contact) => {
     setCongratContact(contact);
@@ -402,6 +360,7 @@ const DashboardContent = () => {
     setSubmitError(null);
     setFormMode("create");
     setSelectedContact(null);
+    setBirthdayValue(undefined);
     form.reset({ name: "", birthday: "", phone: "" });
     setIsFormDrawerOpen(true);
   };
@@ -410,6 +369,10 @@ const DashboardContent = () => {
     if (!selectedContact) return;
     setSubmitError(null);
     setFormMode("edit");
+    const parsedDate = selectedContact.birthday
+      ? new Date(selectedContact.birthday + "T12:00:00")
+      : undefined;
+    setBirthdayValue(parsedDate);
     form.reset({
       name: selectedContact.name,
       birthday: selectedContact.birthday,
@@ -649,10 +612,37 @@ const DashboardContent = () => {
 
               <div className="space-y-2">
                 <Label className="text-[#2E2D2C]">Fecha de cumpleaños</Label>
-                <BirthdayPicker
-                  value={form.watch("birthday")}
-                  onChange={(val) => form.setValue("birthday", val, { shouldValidate: true })}
-                />
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal border-[#E5E5E5] focus:border-[#C6017F] rounded-xl h-12"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-[#717B99]" />
+                      {birthdayValue
+                        ? format(birthdayValue, "d 'de' MMMM", { locale: es })
+                        : <span className="text-[#A1A1A0]">Selecciona una fecha</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={birthdayValue}
+                      onSelect={(date) => {
+                        setBirthdayValue(date);
+                        form.setValue("birthday", date ? format(date, "yyyy-MM-dd") : "", { shouldValidate: true });
+                        setCalendarOpen(false);
+                      }}
+                      locale={es}
+                      captionLayout="dropdown"
+                      fromYear={1940}
+                      toYear={2024}
+                      showOutsideDays={false}
+                      className="rounded-xl"
+                    />
+                  </PopoverContent>
+                </Popover>
                 {form.formState.errors.birthday && (
                   <p className="text-sm text-destructive">{form.formState.errors.birthday.message}</p>
                 )}
