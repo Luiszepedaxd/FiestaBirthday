@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CalendarIcon, MoreHorizontal } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -39,11 +39,17 @@ import { type Contact, useContacts } from "@/hooks/useContacts";
 
 const dashboardQueryClient = new QueryClient();
 
-const contactSchema = z.object({
-  name: z.string().min(1, "El nombre es obligatorio"),
-  birthday: z.string().min(1, "La fecha de cumpleaños es obligatoria"),
-  phone: z.string().optional(),
-});
+const contactSchema = z
+  .object({
+    name: z.string().min(1, "El nombre es obligatorio"),
+    birthday: z.date().optional(),
+    phone: z.string().optional(),
+    interests: z.string().optional(),
+  })
+  .refine((data) => data.birthday !== undefined, {
+    message: "La fecha de cumpleaños es obligatoria",
+    path: ["birthday"],
+  });
 
 type ContactFormValues = z.infer<typeof contactSchema>;
 type FormMode = "create" | "edit";
@@ -265,7 +271,6 @@ const DashboardContent = () => {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [birthdayValue, setBirthdayValue] = useState<Date | undefined>(undefined);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const openCongratModal = (contact: Contact) => {
@@ -277,10 +282,23 @@ const DashboardContent = () => {
     resolver: zodResolver(contactSchema),
     defaultValues: {
       name: "",
-      birthday: "",
       phone: "",
+      interests: "",
     },
   });
+
+  const { reset } = form;
+  const birthdayWatch = form.watch("birthday");
+
+  useEffect(() => {
+    if (formMode !== "edit" || !selectedContact) return;
+    reset({
+      name: selectedContact.name,
+      birthday: new Date(`${selectedContact.birthday}T12:00:00`),
+      phone: selectedContact.phone || "",
+      interests: selectedContact.interests || "",
+    });
+  }, [formMode, selectedContact, reset]);
 
   const saveContactMutation = useMutation({
     mutationFn: async (values: ContactFormValues) => {
@@ -294,8 +312,9 @@ const DashboardContent = () => {
 
       const payload = {
         name: values.name.trim(),
-        birthday: values.birthday,
+        birthday: format(values.birthday!, "yyyy-MM-dd"),
         phone: values.phone?.trim() || null,
+        interests: values.interests?.trim() || null,
       };
 
       if (formMode === "edit" && selectedContact) {
@@ -318,7 +337,7 @@ const DashboardContent = () => {
     onSuccess: async () => {
       setIsFormDrawerOpen(false);
       setSelectedContact(null);
-      form.reset();
+      reset({ name: "", phone: "", interests: "", birthday: undefined });
       await queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
     onError: (mutationError) => {
@@ -360,8 +379,7 @@ const DashboardContent = () => {
     setSubmitError(null);
     setFormMode("create");
     setSelectedContact(null);
-    setBirthdayValue(undefined);
-    form.reset({ name: "", birthday: "", phone: "" });
+    reset({ name: "", phone: "", interests: "", birthday: undefined });
     setIsFormDrawerOpen(true);
   };
 
@@ -369,15 +387,6 @@ const DashboardContent = () => {
     if (!selectedContact) return;
     setSubmitError(null);
     setFormMode("edit");
-    const parsedDate = selectedContact.birthday
-      ? new Date(selectedContact.birthday + "T12:00:00")
-      : undefined;
-    setBirthdayValue(parsedDate);
-    form.reset({
-      name: selectedContact.name,
-      birthday: selectedContact.birthday,
-      phone: selectedContact.phone ?? "",
-    });
     setIsActionsDrawerOpen(false);
     setIsFormDrawerOpen(true);
   };
@@ -620,18 +629,17 @@ const DashboardContent = () => {
                       className="w-full justify-start text-left font-normal border-[#E5E5E5] focus:border-[#C6017F] rounded-xl h-12"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4 text-[#717B99]" />
-                      {birthdayValue
-                        ? format(birthdayValue, "d 'de' MMMM", { locale: es })
+                      {birthdayWatch
+                        ? format(birthdayWatch, "d 'de' MMMM", { locale: es })
                         : <span className="text-[#A1A1A0]">Selecciona una fecha</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
-                      selected={birthdayValue}
+                      selected={birthdayWatch}
                       onSelect={(date) => {
-                        setBirthdayValue(date);
-                        form.setValue("birthday", date ? format(date, "yyyy-MM-dd") : "", { shouldValidate: true });
+                        form.setValue("birthday", date ?? undefined, { shouldValidate: true });
                         setCalendarOpen(false);
                       }}
                       locale={es}
@@ -651,6 +659,18 @@ const DashboardContent = () => {
                   id="phone"
                   className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
                   {...form.register("phone")}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interests" className="text-[#2E2D2C]">
+                  Intereses (opcional)
+                </Label>
+                <Input
+                  id="interests"
+                  placeholder="ej: Rock de los 80, yoga, café artesanal"
+                  className="h-12 rounded-xl border-[#E5E5E5] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+                  {...form.register("interests")}
                 />
               </div>
 
@@ -688,46 +708,6 @@ const DashboardContent = () => {
             <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[#717B99]">
               Acciones
             </p>
-
-            <Button
-              type="button"
-              className="w-full border border-[#C6017F] bg-white text-[#C6017F] hover:bg-[#FFF0F9]"
-              variant="outline"
-              onClick={() => {
-                if (!selectedContact?.phone) {
-                  toast("Este contacto no tiene teléfono guardado");
-                  return;
-                }
-                const phone = selectedContact.phone.replace(/[\s\-]/g, "");
-                const name = encodeURIComponent(selectedContact.name);
-                window.open(
-                  `https://wa.me/52${phone}?text=¡Hola%20${name}!%20🎂%20¡Feliz%20cumpleaños!%20Espero%20que%20tengas%20un%20día%20increíble%20🎉`,
-                  "_blank",
-                );
-              }}
-            >
-              Felicitar por WhatsApp 💬
-            </Button>
-
-            <Button
-              type="button"
-              className="w-full border border-[#5221D6] bg-white text-[#5221D6] hover:bg-[#F3F0FF]"
-              variant="outline"
-              onClick={() => toast("Próximamente — sugerencias con IA")}
-            >
-              Sugerir regalo 🎁
-            </Button>
-
-            <Button
-              type="button"
-              className="w-full border border-[#C6017F] bg-white text-[#C6017F] hover:bg-[#FFF0F9]"
-              variant="outline"
-              onClick={() => window.open("https://fiestamas.com/c", "_blank")}
-            >
-              Organizar fiesta 🎉
-            </Button>
-
-            <div className="my-1 h-px w-full bg-[#F2F2F2]" />
 
             <Button type="button" onClick={openEditDrawer}>
               Editar
