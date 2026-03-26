@@ -25,3 +25,6 @@ dist-ssr
 
 # Cursor / sandbox workspace (nested empty repo)
 .workspace/
+
+# Environment variables
+.env
