@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarIcon, Loader2, MoreHorizontal } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,14 +15,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "@/components/ui/sonner";
 import {
   Dialog,
@@ -130,6 +130,12 @@ const getDaysUntil = (birthday: string): number => {
   return Math.round((candidate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 };
 
+const contactEditBtnClass =
+  "shrink-0 rounded-full border border-[#5221D6] bg-white px-3 py-1 text-xs font-medium text-[#5221D6] hover:bg-[#5221D6]/5";
+
+const contactDeleteIconBtnClass =
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#FF4444] hover:bg-red-50 hover:text-[#FF4444]";
+
 type ContactCardProps = {
   contact: Contact;
   days: number;
@@ -138,10 +144,20 @@ type ContactCardProps = {
   badgeLabel: string;
   avatarBg: string;
   onCongrat: () => void;
-  onActions: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 };
 
-const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onCongrat, onActions }: ContactCardProps) => (
+const ContactCard = ({
+  contact,
+  badgeBg,
+  badgeText,
+  badgeLabel,
+  avatarBg,
+  onCongrat,
+  onEdit,
+  onDelete,
+}: ContactCardProps) => (
   <div className="flex items-center gap-3 rounded-2xl border border-[#F2F2F2] bg-white p-4">
     <div
       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
@@ -161,7 +177,7 @@ const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onCong
       </span>
     </div>
 
-    <div className="flex shrink-0 items-center gap-1">
+    <div className="flex shrink-0 flex-row flex-wrap items-center justify-end gap-2">
       <button
         type="button"
         onClick={onCongrat}
@@ -169,13 +185,19 @@ const ContactCard = ({ contact, badgeBg, badgeText, badgeLabel, avatarBg, onCong
       >
         Felicitar 🎉
       </button>
-      <button
-        type="button"
-        onClick={onActions}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-[#717B99] hover:bg-[#F5F5F5]"
-      >
-        <MoreHorizontal size={18} />
+      <button type="button" onClick={onEdit} className={contactEditBtnClass}>
+        Actualizar info
       </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={onDelete}
+        className={`${contactDeleteIconBtnClass} h-8 w-8`}
+        aria-label="Eliminar contacto"
+      >
+        <span className="text-base leading-none" aria-hidden>🗑️</span>
+      </Button>
     </div>
   </div>
 );
@@ -573,7 +595,8 @@ const DashboardContent = () => {
     return days > 0 && parsed.getMonth() !== currentMonth;
   });
   const [isFormDrawerOpen, setIsFormDrawerOpen] = useState(false);
-  const [isActionsDrawerOpen, setIsActionsDrawerOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [contactPendingDelete, setContactPendingDelete] = useState<Contact | null>(null);
   const [isCongratModalOpen, setIsCongratModalOpen] = useState(false);
   const [congratContact, setCongratContact] = useState<Contact | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -682,9 +705,18 @@ const DashboardContent = () => {
 
       if (deleteError) throw deleteError;
     },
-    onSuccess: async () => {
-      setIsActionsDrawerOpen(false);
-      setSelectedContact(null);
+    onSuccess: async (_data, deletedId) => {
+      setDeleteDialogOpen(false);
+      setContactPendingDelete(null);
+      let closedEditForDeleted = false;
+      setSelectedContact((prev) => {
+        if (prev?.id === deletedId) {
+          closedEditForDeleted = true;
+          return null;
+        }
+        return prev;
+      });
+      if (closedEditForDeleted) setIsFormDrawerOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
@@ -702,12 +734,16 @@ const DashboardContent = () => {
     setIsFormDrawerOpen(true);
   };
 
-  const openEditDrawer = () => {
-    if (!selectedContact) return;
+  const openEditContact = (contact: Contact) => {
     setSubmitError(null);
     setFormMode("edit");
-    setIsActionsDrawerOpen(false);
+    setSelectedContact(contact);
     setIsFormDrawerOpen(true);
+  };
+
+  const openDeleteConfirm = (contact: Contact) => {
+    setContactPendingDelete(contact);
+    setDeleteDialogOpen(true);
   };
 
   const onSubmit = (values: ContactFormValues) => {
@@ -820,7 +856,8 @@ const DashboardContent = () => {
                       badgeLabel="¡Hoy!"
                       avatarBg="#C6017F"
                       onCongrat={() => openCongratModal(contact)}
-                      onActions={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                      onEdit={() => openEditContact(contact)}
+                      onDelete={() => openDeleteConfirm(contact)}
                     />
                   ))}
                 </div>
@@ -843,7 +880,8 @@ const DashboardContent = () => {
                         badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
                         avatarBg="#C6017F"
                         onCongrat={() => openCongratModal(contact)}
-                        onActions={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                        onEdit={() => openEditContact(contact)}
+                        onDelete={() => openDeleteConfirm(contact)}
                       />
                     );
                   })}
@@ -867,7 +905,8 @@ const DashboardContent = () => {
                         badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
                         avatarBg="#C6017F"
                         onCongrat={() => openCongratModal(contact)}
-                        onActions={() => { setSelectedContact(contact); setIsActionsDrawerOpen(true); }}
+                        onEdit={() => openEditContact(contact)}
+                        onDelete={() => openDeleteConfirm(contact)}
                       />
                     );
                   })}
@@ -884,24 +923,38 @@ const DashboardContent = () => {
               ) : (
                 <div className="rounded-2xl border border-[#F2F2F2] bg-white">
                   {orderedContacts.map((contact) => (
-                    <button
-                      type="button"
+                    <div
                       key={contact.id}
-                      onClick={() => {
-                        setSelectedContact(contact);
-                        setIsActionsDrawerOpen(true);
-                      }}
-                      className="flex w-full items-center gap-3 border-b border-[#F2F2F2] p-4 text-left last:border-b-0"
+                      className="flex w-full items-center gap-3 border-b border-[#F2F2F2] p-4 last:border-b-0"
                     >
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#5221D6] text-sm font-bold text-white">
                         {getInitials(contact.name)}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate font-bold text-[#2E2D2C]">{contact.name}</p>
                         <p className="truncate text-xs text-[#717B99]">{contact.phone || "Sin teléfono"}</p>
                         <p className="text-xs text-[#717B99]">{formatBirthday(contact.birthday)}</p>
                       </div>
-                    </button>
+                      <div className="flex shrink-0 flex-row items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditContact(contact)}
+                          className={contactEditBtnClass}
+                        >
+                          Actualizar info
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openDeleteConfirm(contact)}
+                          className={`${contactDeleteIconBtnClass} h-8 w-8`}
+                          aria-label="Eliminar contacto"
+                        >
+                          <span className="text-base leading-none" aria-hidden>🗑️</span>
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -1027,41 +1080,37 @@ const DashboardContent = () => {
         </DialogContent>
       </Dialog>
 
-      <Drawer open={isActionsDrawerOpen} onOpenChange={setIsActionsDrawerOpen}>
-        <DrawerContent className="rounded-t-2xl">
-          <DrawerHeader>
-            <DrawerTitle className="font-bold text-[#2E2D2C]">{selectedContact?.name}</DrawerTitle>
-            <DrawerDescription className="text-[#717B99]">
-              Selecciona una acción para este contacto.
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerFooter>
-            <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[#717B99]">
-              Acciones
-            </p>
-
-            <Button type="button" onClick={openEditDrawer}>
-              Editar
-            </Button>
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setContactPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-[90vw] rounded-2xl sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#2E2D2C]">
+              ¿Eliminar a {contactPendingDelete?.name ?? ""}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>Esta acción no se puede deshacer</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancelar</AlertDialogCancel>
             <Button
               type="button"
               variant="destructive"
-              disabled={!selectedContact || deleteContactMutation.isPending}
+              disabled={!contactPendingDelete || deleteContactMutation.isPending}
+              className="bg-[#FF4444] hover:bg-[#E03E3E]"
               onClick={() => {
-                if (!selectedContact) return;
-                deleteContactMutation.mutate(selectedContact.id);
+                if (!contactPendingDelete) return;
+                deleteContactMutation.mutate(contactPendingDelete.id);
               }}
             >
               {deleteContactMutation.isPending ? "Eliminando..." : "Eliminar"}
             </Button>
-            <DrawerClose asChild>
-              <Button variant="outline" type="button">
-                Cerrar
-              </Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <CongratModal
         contact={congratContact}
