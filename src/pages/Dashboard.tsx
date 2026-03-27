@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Drawer,
   DrawerClose,
@@ -181,17 +182,38 @@ type CongratModalProps = {
 
 type GiftPhase = "idle" | "loading" | "error" | "success";
 
+type AudioPhase = "idle" | "loading" | "error" | "success";
+
+const defaultAudioGreetingMessage = (name: string) =>
+  `¡Feliz cumpleaños ${name}! Espero que este día esté lleno de alegría, risas y momentos especiales. ¡Que todos tus deseos se hagan realidad! 🎂🎉`;
+
 const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
   const queryClient = useQueryClient();
   const [giftPhase, setGiftPhase] = useState<GiftPhase>("idle");
   const [giftItems, setGiftItems] = useState<{ title: string; description: string; price: string }[]>([]);
 
+  const [audioModalOpen, setAudioModalOpen] = useState(false);
+  const [audioMessage, setAudioMessage] = useState("");
+  const [audioPhase, setAudioPhase] = useState<AudioPhase>("idle");
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) {
       setGiftPhase("idle");
       setGiftItems([]);
+      setAudioModalOpen(false);
     }
   }, [open, contact?.id]);
+
+  useEffect(() => {
+    if (!audioModalOpen) {
+      setAudioPhase("idle");
+      setAudioUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    }
+  }, [audioModalOpen]);
 
   const handleWhatsApp = () => {
     if (!contact) return;
@@ -277,11 +299,105 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
     }
   };
 
+  const openAudioModal = () => {
+    if (!contact) return;
+    setAudioMessage(defaultAudioGreetingMessage(contact.name));
+    setAudioPhase("idle");
+    setAudioUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setAudioModalOpen(true);
+  };
+
+  const handleGenerateAudio = async () => {
+    if (!contact) return;
+    setAudioPhase("loading");
+    try {
+      const { data: settingsRow, error: settingsError } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", OPENROUTER_SETTINGS_KEY)
+        .maybeSingle();
+      if (settingsError) throw settingsError;
+      const apiKey = settingsRow?.value;
+      if (!apiKey) throw new Error("missing_api_key");
+
+      const { data: configRow, error: configError } = await supabase
+        .from("ai_config")
+        .select("model")
+        .eq("feature", "audio_greeting")
+        .maybeSingle();
+      if (configError) throw configError;
+      const model = configRow?.model ?? "openai/gpt-4o-mini-audio-preview";
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          modalities: ["text", "audio"],
+          audio: { voice: "alloy", format: "mp3" },
+          messages: [{ role: "user", content: audioMessage }],
+        }),
+      });
+
+      const json = (await response.json()) as {
+        choices?: Array<{
+          message?: { audio?: { data?: string }; content?: string };
+        }>;
+        error?: { message?: string };
+      };
+      if (!response.ok) {
+        throw new Error(json.error?.message || "openrouter_error");
+      }
+      const audioData = json.choices?.[0]?.message?.audio?.data;
+      if (!audioData) throw new Error("no_audio");
+
+      const audioBlob = new Blob(
+        [Uint8Array.from(atob(audioData), (c) => c.charCodeAt(0))],
+        { type: "audio/mp3" },
+      );
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+      setAudioPhase("success");
+    } catch {
+      setAudioPhase("error");
+    }
+  };
+
+  const handleShareAudioWhatsApp = () => {
+    if (!contact?.phone) {
+      toast("Este contacto no tiene teléfono guardado");
+      return;
+    }
+    const phone = contact.phone.replace(/[\s\-]/g, "");
+    const text = encodeURIComponent("Te mando un audio de felicitación 🎙️");
+    window.open(`https://wa.me/52${phone}?text=${text}`, "_blank");
+  };
+
+  const handleDownloadAudio = () => {
+    if (!audioUrl || !contact) return;
+    const a = document.createElement("a");
+    a.href = audioUrl;
+    const safe = contact.name.replace(/[^\w\s-]/g, "").trim() || "contacto";
+    a.download = `felicitacion-${safe}.mp3`;
+    a.click();
+  };
+
   if (!contact) return null;
 
   const giftLoading = giftPhase === "loading";
+  const audioLoading = audioPhase === "loading";
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="w-full h-full max-w-full m-0 rounded-none sm:rounded-2xl sm:max-w-md sm:h-auto sm:m-auto p-0">
         <div className="overflow-y-auto max-h-[90vh]">
@@ -357,20 +473,19 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
               </div>
             </div>
 
-            {/* Video IA */}
-            <div
-              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left"
-              style={{ borderLeftColor: "#5221D6", backgroundColor: "#F0F0FF", borderTop: "1px solid #E3E0F9", borderRight: "1px solid #E3E0F9", borderBottom: "1px solid #E3E0F9", opacity: 0.6 }}
+            {/* Audio de felicitación */}
+            <button
+              type="button"
+              onClick={openAudioModal}
+              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left transition-opacity hover:opacity-80"
+              style={{ borderLeftColor: "#5221D6", backgroundColor: "#F0F0FF", borderTop: "1px solid #E3E0F9", borderRight: "1px solid #E3E0F9", borderBottom: "1px solid #E3E0F9" }}
             >
-              <span className="text-2xl">🎬</span>
+              <span className="text-2xl">🎙️</span>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-[#2E2D2C]">Video de felicitación</p>
-                  <span className="rounded-full bg-[#E5E5E5] px-2 py-0.5 text-[10px] font-semibold text-[#717B99]">Próximamente</span>
-                </div>
-                <p className="text-xs text-[#717B99]">Video único generado con IA</p>
+                <p className="font-bold text-[#2E2D2C]">Audio de felicitación 🎙️</p>
+                <p className="text-xs text-[#717B99]">Mensaje de voz personalizado con IA</p>
               </div>
-            </div>
+            </button>
 
             {/* Organizar fiesta */}
             <button
@@ -424,6 +539,85 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={audioModalOpen}
+      onOpenChange={(v) => {
+        setAudioModalOpen(v);
+        if (!v) {
+          setAudioPhase("idle");
+          setAudioUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+          });
+        }
+      }}
+    >
+      <DialogContent className="w-full max-w-md sm:rounded-2xl">
+        <DialogTitle className="text-xl font-bold text-[#2E2D2C]">
+          Audio de felicitación 🎙️
+        </DialogTitle>
+        <DialogDescription className="text-base text-[#717B99]">
+          {contact.name}
+        </DialogDescription>
+
+        <div className="mt-4 space-y-2">
+          <Label htmlFor="audio-greeting-msg" className="text-[#2E2D2C]">
+            Mensaje de felicitación
+          </Label>
+          <Textarea
+            id="audio-greeting-msg"
+            rows={4}
+            value={audioMessage}
+            onChange={(e) => setAudioMessage(e.target.value)}
+            className="min-h-[100px] rounded-xl border-[#E5E5E5] text-sm focus-visible:border-[#C6017F] focus-visible:ring-[#C6017F]"
+          />
+        </div>
+
+        <Button
+          type="button"
+          disabled={audioLoading}
+          onClick={() => void handleGenerateAudio()}
+          className="mt-4 h-12 w-full bg-[#C6017F] text-white hover:bg-[#B10072]"
+        >
+          {audioLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Generando audio...
+            </span>
+          ) : (
+            "Generar audio"
+          )}
+        </Button>
+
+        {audioPhase === "error" && (
+          <p className="mt-4 text-center text-sm text-red-600">No se pudo generar el audio</p>
+        )}
+
+        {audioPhase === "success" && audioUrl && (
+          <div className="mt-4 space-y-3">
+            <audio controls src={audioUrl} className="mt-4 w-full" />
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-[#E5E5E5]"
+              onClick={handleDownloadAudio}
+            >
+              Descargar audio
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full border-[#E5E5E5]"
+              onClick={handleShareAudioWhatsApp}
+            >
+              Compartir por WhatsApp
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 
