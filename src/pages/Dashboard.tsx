@@ -196,6 +196,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
   const [audioMessage, setAudioMessage] = useState("");
   const [audioPhase, setAudioPhase] = useState<AudioPhase>("idle");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioErrorMessage, setAudioErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -208,6 +209,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
   useEffect(() => {
     if (!audioModalOpen) {
       setAudioPhase("idle");
+      setAudioErrorMessage(null);
       setAudioUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
@@ -303,6 +305,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
     if (!contact) return;
     setAudioMessage(defaultAudioGreetingMessage(contact.name));
     setAudioPhase("idle");
+    setAudioErrorMessage(null);
     setAudioUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -313,6 +316,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
   const handleGenerateAudio = async () => {
     if (!contact) return;
     setAudioPhase("loading");
+    setAudioErrorMessage(null);
     try {
       const { data: settingsRow, error: settingsError } = await supabase
         .from("settings")
@@ -323,13 +327,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
       const apiKey = settingsRow?.value;
       if (!apiKey) throw new Error("missing_api_key");
 
-      const { data: configRow, error: configError } = await supabase
-        .from("ai_config")
-        .select("model")
-        .eq("feature", "audio_greeting")
-        .maybeSingle();
-      if (configError) throw configError;
-      const model = configRow?.model ?? "openai/gpt-4o-mini-audio-preview";
+      const mensaje = audioMessage;
 
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -338,28 +336,43 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model,
-          modalities: ["text", "audio"],
-          audio: { voice: "alloy", format: "mp3" },
-          messages: [{ role: "user", content: audioMessage }],
+          model: "openai/gpt-4o-mini-audio-preview",
+          messages: [
+            {
+              role: "user",
+              content: mensaje,
+            },
+          ],
+          modalities: ["audio"],
+          audio: {
+            voice: "alloy",
+            format: "wav",
+          },
         }),
       });
 
-      const json = (await response.json()) as {
-        choices?: Array<{
-          message?: { audio?: { data?: string }; content?: string };
-        }>;
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { audio?: { data?: string } } }>;
         error?: { message?: string };
       };
-      if (!response.ok) {
-        throw new Error(json.error?.message || "openrouter_error");
+      console.log("OpenRouter response:", JSON.stringify(data));
+
+      if (data.error) {
+        setAudioPhase("error");
+        setAudioErrorMessage(data.error.message ?? "Error");
+        return;
       }
-      const audioData = json.choices?.[0]?.message?.audio?.data;
-      if (!audioData) throw new Error("no_audio");
+
+      const audioData = data.choices?.[0]?.message?.audio?.data;
+      if (!audioData) {
+        setAudioPhase("error");
+        setAudioErrorMessage("No se pudo generar el audio");
+        return;
+      }
 
       const audioBlob = new Blob(
         [Uint8Array.from(atob(audioData), (c) => c.charCodeAt(0))],
-        { type: "audio/mp3" },
+        { type: "audio/wav" },
       );
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl((prev) => {
@@ -369,6 +382,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
       setAudioPhase("success");
     } catch {
       setAudioPhase("error");
+      setAudioErrorMessage("No se pudo generar el audio");
     }
   };
 
@@ -387,7 +401,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
     const a = document.createElement("a");
     a.href = audioUrl;
     const safe = contact.name.replace(/[^\w\s-]/g, "").trim() || "contacto";
-    a.download = `felicitacion-${safe}.mp3`;
+    a.download = `felicitacion-${safe}.wav`;
     a.click();
   };
 
@@ -591,7 +605,9 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
         </Button>
 
         {audioPhase === "error" && (
-          <p className="mt-4 text-center text-sm text-red-600">No se pudo generar el audio</p>
+          <p className="mt-4 text-center text-sm text-red-600">
+            {audioErrorMessage ?? "No se pudo generar el audio"}
+          </p>
         )}
 
         {audioPhase === "success" && audioUrl && (
