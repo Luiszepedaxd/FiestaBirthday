@@ -23,7 +23,6 @@ const OPENROUTER_SETTINGS_KEY = "openrouter_api_key";
 const FALLBACK_MODELS = [
   { id: "openai/gpt-4o-mini", name: "GPT-4o Mini" },
   { id: "openai/gpt-4o", name: "GPT-4o" },
-  { id: "openai/gpt-4o-mini-audio-preview", name: "GPT-4o Mini Audio Preview" },
   { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku" },
   { id: "anthropic/claude-3-5-sonnet", name: "Claude 3.5 Sonnet" },
   { id: "meta-llama/llama-3.1-8b-instruct", name: "Llama 3.1 8B" },
@@ -53,19 +52,6 @@ const FEATURES: {
     icon: "💬",
     title: "Mensaje WhatsApp",
     desc: "Genera mensaje personalizado de felicitación",
-  },
-  {
-    key: "video_script",
-    icon: "🎬",
-    title: "Video de felicitación",
-    desc: "Genera el guión para el video con IA",
-  },
-  {
-    key: "audio_greeting",
-    icon: "🎙️",
-    title: "Audio de felicitación",
-    desc: "Genera mensaje de voz personalizado",
-    promptPlaceholder: "Eres un asistente que genera mensajes emotivos de cumpleaños...",
   },
 ];
 
@@ -155,9 +141,6 @@ const AdminContent = () => {
         models[row.feature] = row.model;
         prompts[row.feature] = row.prompt ?? "";
       });
-      if (!models.audio_greeting) {
-        models.audio_greeting = "openai/gpt-4o-mini-audio-preview";
-      }
       setLocalModels(models);
       setLocalPrompts(prompts);
     }
