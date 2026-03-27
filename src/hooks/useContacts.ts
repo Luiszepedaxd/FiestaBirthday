@@ -9,6 +9,7 @@ export type Contact = {
   phone: string | null;
   birthday: string;
   interests: string | null;
+  gift_history: unknown | null;
 };
 
 type ContactWithMeta = Contact & {
@@ -54,7 +55,7 @@ export const useContacts = () => {
 
       const { data, error } = await supabase
         .from("contacts")
-        .select("id, user_id, name, phone, birthday, interests")
+        .select("id, user_id, name, phone, birthday, interests, gift_history")
         .eq("user_id", user.id);
 
       if (error) {

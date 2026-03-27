@@ -43,7 +43,14 @@ const ADMIN_EMAIL = "luis.j20000@gmail.com";
 
 const OPENROUTER_SETTINGS_KEY = "openrouter_api_key";
 
-function parseGiftSuggestionsContent(raw: string): { title: string; description: string; price: string }[] {
+type GiftSuggestionItem = {
+  title: string;
+  description: string;
+  price: string;
+  buscarEn: string;
+};
+
+function parseGiftSuggestionsContent(raw: string): GiftSuggestionItem[] {
   let text = raw.trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) text = fenced[1].trim();
@@ -68,6 +75,7 @@ function parseGiftSuggestionsContent(raw: string): { title: string; description:
       title: String(o.title ?? o.titulo ?? ""),
       description: String(o.description ?? o.descripcion ?? ""),
       price: String(o.price ?? o.precio ?? ""),
+      buscarEn: String(o.buscar_en ?? o.buscarEn ?? ""),
     };
   });
 }
@@ -179,17 +187,30 @@ type CongratModalProps = {
   onClose: () => void;
 };
 
-type GiftPhase = "idle" | "loading" | "error" | "success";
+type GiftPhase = "idle" | "loading" | "error";
+type GiftView = "main" | "budget" | "results";
+
+const BUDGET_PILLS = [
+  { id: "r1" as const, label: "$200-500", value: 350 },
+  { id: "r2" as const, label: "$500-1000", value: 750 },
+  { id: "r3" as const, label: "$1000-2500", value: 1750 },
+];
 
 const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
   const queryClient = useQueryClient();
+  const [giftView, setGiftView] = useState<GiftView>("main");
   const [giftPhase, setGiftPhase] = useState<GiftPhase>("idle");
-  const [giftItems, setGiftItems] = useState<{ title: string; description: string; price: string }[]>([]);
+  const [giftItems, setGiftItems] = useState<GiftSuggestionItem[]>([]);
+  const [budgetInput, setBudgetInput] = useState("");
+  const [budgetPill, setBudgetPill] = useState<(typeof BUDGET_PILLS)[number]["id"] | null>(null);
 
   useEffect(() => {
     if (!open) {
+      setGiftView("main");
       setGiftPhase("idle");
       setGiftItems([]);
+      setBudgetInput("");
+      setBudgetPill(null);
     }
   }, [open, contact?.id]);
 
@@ -207,8 +228,11 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
     );
   };
 
-  const handleSuggestGift = async () => {
+  const handleGenerateGiftSuggestions = async () => {
     if (!contact) return;
+    const presupuesto = Number.parseFloat(budgetInput.replace(",", ".").trim());
+    if (Number.isNaN(presupuesto) || presupuesto <= 0) return;
+
     setGiftPhase("loading");
     try {
       const { data: settingsRow, error: settingsError } = await supabase
@@ -228,6 +252,14 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
       if (configError) throw configError;
       if (!configRow?.model || !configRow?.prompt) throw new Error("missing_config");
 
+      const historial =
+        contact.gift_history != null ? JSON.stringify(contact.gift_history) : "ninguno";
+
+      const userContent = `Nombre: ${contact.name}. 
+Intereses: ${contact.interests || "no especificados"}. 
+Presupuesto: $${presupuesto} MXN.
+Historial de regalos previos: ${historial}`;
+
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -238,10 +270,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
           model: configRow.model,
           messages: [
             { role: "system", content: configRow.prompt },
-            {
-              role: "user",
-              content: `Nombre: ${contact.name}. Intereses: ${contact.interests || "no especificados"}`,
-            },
+            { role: "user", content: userContent },
           ],
         }),
       });
@@ -258,11 +287,17 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
 
       const items = parseGiftSuggestionsContent(raw);
       setGiftItems(items);
-      setGiftPhase("success");
+      setGiftView("results");
+      setGiftPhase("idle");
 
       const giftHistory = {
         date: new Date().toISOString(),
-        suggestions: items,
+        suggestions: items.map((i) => ({
+          titulo: i.title,
+          descripcion: i.description,
+          precio: i.price,
+          buscar_en: i.buscarEn,
+        })),
       };
       const { error: giftSaveError } = await supabase
         .from("contacts")
@@ -280,6 +315,8 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
   if (!contact) return null;
 
   const giftLoading = giftPhase === "loading";
+  const budgetNum = Number.parseFloat(budgetInput.replace(",", ".").trim());
+  const presupuestoValid = !Number.isNaN(budgetNum) && budgetNum > 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -300,7 +337,7 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
           <p className="mt-1 text-sm text-[#717B99]">Cumpleaños: {formatBirthday(contact.birthday)}</p>
         </div>
 
-        {/* Actions */}
+        {giftView === "main" && (
         <div className="px-6 pb-8">
           <p className="mb-3 text-[14px] text-[#717B99]">¿Cómo quieres felicitar?</p>
           <div className="space-y-3">
@@ -322,23 +359,19 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
             {/* Sugerir regalo */}
             <button
               type="button"
-              disabled={giftLoading}
-              onClick={() => void handleSuggestGift()}
-              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left transition-opacity hover:opacity-80 disabled:pointer-events-none disabled:opacity-70"
+              onClick={() => {
+                setGiftView("budget");
+                setGiftPhase("idle");
+                setBudgetInput("");
+                setBudgetPill(null);
+              }}
+              className="flex w-full items-center gap-4 rounded-xl border-l-[3px] p-4 text-left transition-opacity hover:opacity-80"
               style={{ borderLeftColor: "#C6017F", backgroundColor: "#FFF0F9", borderTop: "1px solid #F9E0F3", borderRight: "1px solid #F9E0F3", borderBottom: "1px solid #F9E0F3" }}
             >
               <span className="text-2xl">🎁</span>
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-[#2E2D2C]">Sugerir regalo</p>
-                  <p className="text-xs text-[#717B99]">Ideas según sus gustos</p>
-                </div>
-                {giftLoading && (
-                  <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[#C6017F]">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Generando...
-                  </span>
-                )}
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-[#2E2D2C]">Sugerir regalo</p>
+                <p className="text-xs text-[#717B99]">Ideas según sus gustos</p>
               </div>
             </button>
 
@@ -372,40 +405,147 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
             </button>
 
           </div>
+        </div>
+        )}
 
-          {giftPhase !== "idle" && (
-            <div className="mt-5 border-t border-[#F2F2F2] pt-5">
-              {giftPhase === "loading" && (
-                <div className="flex flex-col items-center justify-center gap-3 py-6">
-                  <Loader2 className="h-8 w-8 animate-spin text-[#C6017F]" />
-                  <p className="text-sm text-[#717B99]">Generando sugerencias...</p>
-                </div>
-              )}
-              {giftPhase === "error" && (
-                <p className="text-center text-sm text-red-600">No se pudieron generar sugerencias</p>
-              )}
-              {giftPhase === "success" && (
-                <div className="space-y-3">
-                  {giftItems.map((item, i) => (
-                    <div
-                      key={`${item.title}-${i}`}
-                      className="rounded-xl border border-[#F9E0F3] border-l-[3px] bg-[#FFF0F9] p-4"
-                      style={{ borderLeftColor: "#C6017F" }}
-                    >
-                      <p className="font-bold text-[#2E2D2C]">{item.title}</p>
-                      <p className="mt-1 text-sm text-[#717B99]">{item.description}</p>
-                      <span
-                        className="mt-2 inline-block rounded-full bg-[#C6017F] px-3 py-1 text-xs font-semibold text-white"
-                      >
-                        {item.price}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+        {giftView === "budget" && (
+        <div className="px-6 pb-8">
+          <button
+            type="button"
+            onClick={() => {
+              setGiftView("main");
+              setGiftPhase("idle");
+            }}
+            className="mb-4 text-left text-xs font-medium text-[#717B99] hover:text-[#2E2D2C]"
+          >
+            ← Volver
+          </button>
+
+          {giftLoading ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-[#C6017F]" />
+              <p className="text-sm text-[#717B99]">Generando sugerencias...</p>
             </div>
+          ) : (
+            <>
+              <p className="text-base font-bold text-[#2E2D2C]">¿Cuál es tu presupuesto?</p>
+
+              <div
+                className="mt-4 flex h-12 items-center rounded-[12px] border border-[#E5E5E5] bg-white px-3 transition-colors focus-within:border-[#C6017F]"
+              >
+                <span className="shrink-0 text-sm text-[#717B99]">$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="500"
+                  value={budgetInput}
+                  onChange={(e) => {
+                    setBudgetInput(e.target.value);
+                    setBudgetPill(null);
+                  }}
+                  className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm text-[#2E2D2C] outline-none placeholder:text-[#A1A1A0] focus:ring-0"
+                />
+                <span className="shrink-0 text-sm text-[#717B99]">MXN</span>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {BUDGET_PILLS.map((p) => {
+                  const active = budgetPill === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setBudgetPill(p.id);
+                        setBudgetInput(String(p.value));
+                      }}
+                      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={
+                        active
+                          ? { borderColor: "#C6017F", backgroundColor: "#C6017F", color: "#FFFFFF" }
+                          : { borderColor: "#C6017F", backgroundColor: "#FFFFFF", color: "#C6017F" }
+                      }
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {giftPhase === "error" && (
+                <p className="mt-3 text-center text-sm text-red-600">No se pudieron generar sugerencias</p>
+              )}
+
+              <button
+                type="button"
+                disabled={!presupuestoValid || giftLoading}
+                onClick={() => void handleGenerateGiftSuggestions()}
+                className="mt-5 h-12 w-full rounded-[12px] text-sm font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ backgroundColor: "#C6017F" }}
+              >
+                Generar sugerencias
+              </button>
+            </>
           )}
         </div>
+        )}
+
+        {giftView === "results" && (
+        <div className="px-6 pb-8">
+          <button
+            type="button"
+            onClick={() => setGiftView("budget")}
+            className="mb-4 text-left text-xs font-medium text-[#717B99] hover:text-[#2E2D2C]"
+          >
+            Volver
+          </button>
+
+          <div className="space-y-4">
+            {giftItems.map((item, i) => (
+              <div
+                key={`${item.title}-${i}`}
+                className="rounded-xl border border-[#F9E0F3] border-l-[3px] bg-[#FFF0F9] p-4"
+                style={{ borderLeftColor: "#C6017F" }}
+              >
+                <p className="font-bold text-[#2E2D2C]">{item.title}</p>
+                <p className="mt-1 text-xs text-[#717B99]">{item.description}</p>
+                <span className="mt-2 inline-block rounded-full bg-[#C6017F] px-3 py-1 text-xs font-semibold text-white">
+                  {item.price}
+                </span>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href={`https://www.amazon.com.mx/s?k=${encodeURIComponent(item.buscarEn)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                    style={{ borderColor: "#FF9900", color: "#FF9900" }}
+                  >
+                    🛒 Amazon
+                  </a>
+                  <a
+                    href={`https://listado.mercadolibre.com.mx/${encodeURIComponent(item.buscarEn)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                    style={{ borderColor: "#FFE600", color: "#333333", backgroundColor: "#FFE600" }}
+                  >
+                    🏪 Mercado Libre
+                  </a>
+                  <a
+                    href={`https://www.google.com.mx/search?q=${encodeURIComponent(`${item.buscarEn} comprar mexico`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                    style={{ borderColor: "#4285F4", color: "#4285F4" }}
+                  >
+                    🔍 Google
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
         </div>
       </DialogContent>
     </Dialog>
