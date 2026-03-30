@@ -137,18 +137,20 @@ const contactEditBtnClass =
 const contactDeleteIconBtnClass =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#FF4444] hover:bg-red-50 hover:text-[#FF4444]";
 
-type SectionVariant = "today" | "month" | "upcoming";
+type SectionVariant = "today" | "week" | "month" | "further";
 
 const sectionBorder: Record<SectionVariant, string> = {
   today: "#C6017F",
-  month: "#5221D6",
-  upcoming: "#E5E5E5",
+  week: "#5221D6",
+  month: "#94A3B8",
+  further: "#E5E5E5",
 };
 
 const sectionAvatarBg: Record<SectionVariant, string> = {
   today: "#C6017F",
-  month: "#5221D6",
-  upcoming: "#717B99",
+  week: "#5221D6",
+  month: "#64748B",
+  further: "#717B99",
 };
 
 function SectionBirthdayCard({
@@ -164,7 +166,6 @@ function SectionBirthdayCard({
   onFelicitar?: () => void;
   onSugerirRegalo?: () => void;
 }) {
-  const showActions = variant === "today" || variant === "month";
   const badgeLabel =
     variant === "today"
       ? "¡Hoy!"
@@ -172,9 +173,11 @@ function SectionBirthdayCard({
   const badgeClass =
     variant === "today"
       ? "bg-[#FFF0F9] text-[#C6017F]"
-      : variant === "month"
+      : variant === "week"
         ? "bg-[#F0F0FF] text-[#5221D6]"
-        : "bg-[#F5F5F5] text-[#717B99]";
+        : variant === "month"
+          ? "bg-[#F1F5F9] text-[#64748B]"
+          : "bg-[#F5F5F5] text-[#717B99]";
 
   return (
     <div
@@ -198,7 +201,7 @@ function SectionBirthdayCard({
           <p className="mt-0.5 text-[13px] text-[#717B99]">{formatBirthday(contact.birthday)}</p>
         </div>
       </div>
-      {showActions && (onFelicitar || onSugerirRegalo) ? (
+      {(onFelicitar || onSugerirRegalo) ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {onFelicitar ? (
             <button
@@ -617,21 +620,17 @@ const DashboardContent = () => {
   const queryClient = useQueryClient();
   const { isLoading, isError, error, orderedContacts } = useContacts();
 
-  const now = new Date();
-  const currentMonth = now.getMonth();
-
   const todayContacts = orderedContacts.filter((c) => getDaysUntil(c.birthday) === 0);
   const todayBirthdays = todayContacts;
-  const thisMonthContacts = orderedContacts.filter((c) => {
+  const weekContacts = orderedContacts.filter((c) => {
     const days = getDaysUntil(c.birthday);
-    const parsed = new Date(c.birthday);
-    return days > 0 && parsed.getMonth() === currentMonth;
+    return days >= 1 && days <= 7;
   });
-  const upcomingContacts = orderedContacts.filter((c) => {
+  const monthWindowContacts = orderedContacts.filter((c) => {
     const days = getDaysUntil(c.birthday);
-    const parsed = new Date(c.birthday);
-    return days > 0 && parsed.getMonth() !== currentMonth;
+    return days >= 8 && days <= 30;
   });
+  const furtherContacts = orderedContacts.filter((c) => getDaysUntil(c.birthday) > 30);
   const [isFormDrawerOpen, setIsFormDrawerOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactPendingDelete, setContactPendingDelete] = useState<Contact | null>(null);
@@ -951,11 +950,32 @@ const DashboardContent = () => {
               </section>
             )}
 
-            {thisMonthContacts.length > 0 && (
+            {weekContacts.length > 0 && (
               <section className="space-y-3">
-                <h2 className="text-base font-bold text-[#141413]">Este mes 🎉</h2>
+                <h2 className="text-base font-bold text-[#141413]">Esta semana 🎉</h2>
                 <div className="space-y-3">
-                  {thisMonthContacts.map((contact) => {
+                  {weekContacts.map((contact) => {
+                    const days = getDaysUntil(contact.birthday);
+                    return (
+                      <SectionBirthdayCard
+                        key={contact.id}
+                        contact={contact}
+                        days={days}
+                        variant="week"
+                        onFelicitar={() => openCongratModal(contact)}
+                        onSugerirRegalo={() => openGiftBudgetModal(contact)}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {monthWindowContacts.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="text-base font-bold text-[#141413]">Este mes 📅</h2>
+                <div className="space-y-3">
+                  {monthWindowContacts.map((contact) => {
                     const days = getDaysUntil(contact.birthday);
                     return (
                       <SectionBirthdayCard
@@ -972,14 +992,21 @@ const DashboardContent = () => {
               </section>
             )}
 
-            {upcomingContacts.length > 0 && (
+            {furtherContacts.length > 0 && (
               <section className="space-y-3">
-                <h2 className="text-base font-bold text-[#141413]">Próximos 📅</h2>
+                <h2 className="text-base font-bold text-[#141413]">Más adelante</h2>
                 <div className="space-y-3">
-                  {upcomingContacts.map((contact) => {
+                  {furtherContacts.map((contact) => {
                     const days = getDaysUntil(contact.birthday);
                     return (
-                      <SectionBirthdayCard key={contact.id} contact={contact} days={days} variant="upcoming" />
+                      <SectionBirthdayCard
+                        key={contact.id}
+                        contact={contact}
+                        days={days}
+                        variant="further"
+                        onFelicitar={() => openCongratModal(contact)}
+                        onSugerirRegalo={() => openGiftBudgetModal(contact)}
+                      />
                     );
                   })}
                 </div>
