@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, Search } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,6 +30,12 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { es } from "date-fns/locale";
@@ -112,11 +118,6 @@ const getInitials = (name: string) =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
 
-const formatDaysBadge = (days: number) => {
-  if (days === 1) return "en 1 día";
-  return `en ${days} días`;
-};
-
 const getDaysUntil = (birthday: string): number => {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -136,77 +137,108 @@ const contactEditBtnClass =
 const contactDeleteIconBtnClass =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#FF4444] hover:bg-red-50 hover:text-[#FF4444]";
 
-type ContactCardProps = {
-  contact: Contact;
-  days: number;
-  badgeBg: string;
-  badgeText: string;
-  badgeLabel: string;
-  avatarBg: string;
-  onCongrat: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+type SectionVariant = "today" | "month" | "upcoming";
+
+const sectionBorder: Record<SectionVariant, string> = {
+  today: "#C6017F",
+  month: "#5221D6",
+  upcoming: "#E5E5E5",
 };
 
-const ContactCard = ({
+const sectionAvatarBg: Record<SectionVariant, string> = {
+  today: "#C6017F",
+  month: "#5221D6",
+  upcoming: "#717B99",
+};
+
+function SectionBirthdayCard({
   contact,
-  badgeBg,
-  badgeText,
-  badgeLabel,
-  avatarBg,
-  onCongrat,
-  onEdit,
-  onDelete,
-}: ContactCardProps) => (
-  <div className="flex items-center gap-3 rounded-2xl border border-[#F2F2F2] bg-white p-4">
+  days,
+  variant,
+  onFelicitar,
+  onSugerirRegalo,
+}: {
+  contact: Contact;
+  days: number;
+  variant: SectionVariant;
+  onFelicitar?: () => void;
+  onSugerirRegalo?: () => void;
+}) {
+  const showActions = variant === "today" || variant === "month";
+  const badgeLabel =
+    variant === "today"
+      ? "¡Hoy!"
+      : `en ${days} día${days === 1 ? "" : "s"}`;
+  const badgeClass =
+    variant === "today"
+      ? "bg-[#FFF0F9] text-[#C6017F]"
+      : variant === "month"
+        ? "bg-[#F0F0FF] text-[#5221D6]"
+        : "bg-[#F5F5F5] text-[#717B99]";
+
+  return (
     <div
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-      style={{ backgroundColor: avatarBg }}
+      className="overflow-hidden rounded-2xl bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+      style={{ borderLeft: `3px solid ${sectionBorder[variant]}` }}
     >
-      {getInitials(contact.name)}
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+          style={{ backgroundColor: sectionAvatarBg[variant] }}
+        >
+          {getInitials(contact.name)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-base font-bold text-[#141413]">{contact.name}</p>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badgeClass}`}>
+              {badgeLabel}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[13px] text-[#717B99]">{formatBirthday(contact.birthday)}</p>
+        </div>
+      </div>
+      {showActions && (onFelicitar || onSugerirRegalo) ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {onFelicitar ? (
+            <button
+              type="button"
+              onClick={onFelicitar}
+              className="rounded-full border border-[#C6017F] bg-white px-3 py-1.5 text-xs font-semibold text-[#C6017F] hover:bg-[#FFF0F9]"
+            >
+              Felicitar 🎉
+            </button>
+          ) : null}
+          {onSugerirRegalo ? (
+            <button
+              type="button"
+              onClick={onSugerirRegalo}
+              className="rounded-full border border-[#5221D6] bg-white px-3 py-1.5 text-xs font-semibold text-[#5221D6] hover:bg-[#5221D6]/5"
+            >
+              Sugerir regalo 🎁
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
+  );
+}
 
-    <div className="min-w-0 flex-1">
-      <p className="truncate font-bold text-[#2E2D2C]">{contact.name}</p>
-      <p className="text-xs text-[#717B99]">{formatBirthday(contact.birthday)}</p>
-      <span
-        className="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold"
-        style={{ backgroundColor: badgeBg, color: badgeText }}
-      >
-        {badgeLabel}
-      </span>
-    </div>
-
-    <div className="flex shrink-0 flex-row flex-wrap items-center justify-end gap-2">
-      <button
-        type="button"
-        onClick={onCongrat}
-        className="rounded-full border border-[#C6017F] px-3 py-1 text-xs font-semibold text-[#C6017F] hover:bg-[#FFF0F9]"
-      >
-        Felicitar 🎉
-      </button>
-      <button type="button" onClick={onEdit} className={contactEditBtnClass}>
-        Actualizar info
-      </button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onDelete}
-        className={`${contactDeleteIconBtnClass} h-8 w-8`}
-        aria-label="Eliminar contacto"
-      >
-        <span className="text-base leading-none" aria-hidden>🗑️</span>
-      </Button>
-    </div>
-  </div>
-);
-
+function getEmailInitials(email: string | null): string {
+  if (!email) return "?";
+  const local = email.split("@")[0] ?? "";
+  const parts = local.split(/[._-]/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  }
+  return local.slice(0, 2).toUpperCase() || "?";
+}
 
 type CongratModalProps = {
   contact: Contact | null;
   open: boolean;
   onClose: () => void;
+  initialGiftView?: "main" | "budget";
 };
 
 type GiftPhase = "idle" | "loading" | "error";
@@ -218,7 +250,7 @@ const BUDGET_PILLS = [
   { id: "r3" as const, label: "$1000-2500", value: 1750 },
 ];
 
-const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
+const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: CongratModalProps) => {
   const queryClient = useQueryClient();
   const [giftView, setGiftView] = useState<GiftView>("main");
   const [giftPhase, setGiftPhase] = useState<GiftPhase>("idle");
@@ -233,8 +265,14 @@ const CongratModal = ({ contact, open, onClose }: CongratModalProps) => {
       setGiftItems([]);
       setBudgetInput("");
       setBudgetPill(null);
+      return;
     }
-  }, [open, contact?.id]);
+    setGiftView(initialGiftView);
+    setGiftPhase("idle");
+    setGiftItems([]);
+    setBudgetInput("");
+    setBudgetPill(null);
+  }, [open, contact?.id, initialGiftView]);
 
   const handleWhatsApp = () => {
     if (!contact) return;
@@ -604,6 +642,9 @@ const DashboardContent = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showAdminNav, setShowAdminNav] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [contactSearch, setContactSearch] = useState("");
+  const [congratOpenGift, setCongratOpenGift] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -611,14 +652,34 @@ const DashboardContent = () => {
         data: { user },
       } = await supabase.auth.getUser();
       setShowAdminNav(user?.email === ADMIN_EMAIL);
+      setUserEmail(user?.email ?? null);
     };
     void load();
   }, []);
 
   const openCongratModal = (contact: Contact) => {
+    setCongratOpenGift(false);
     setCongratContact(contact);
     setIsCongratModalOpen(true);
   };
+
+  const openGiftBudgetModal = (contact: Contact) => {
+    setCongratOpenGift(true);
+    setCongratContact(contact);
+    setIsCongratModalOpen(true);
+  };
+
+  const closeCongratModal = () => {
+    setIsCongratModalOpen(false);
+    setCongratOpenGift(false);
+  };
+
+  const contactQuery = contactSearch.trim().toLowerCase();
+  const filteredContacts = orderedContacts.filter((c) => {
+    if (!contactQuery) return true;
+    const hay = `${c.name} ${c.phone ?? ""} ${formatBirthday(c.birthday)}`.toLowerCase();
+    return hay.includes(contactQuery);
+  });
 
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
@@ -753,40 +814,47 @@ const DashboardContent = () => {
 
   return (
     <div
-      className="min-h-screen bg-[#FFFFFF] text-[#2E2D2C]"
+      className="min-h-screen bg-[#FAF9F5] text-[#2E2D2C]"
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
       <header className="fixed inset-x-0 top-0 z-40 border-b border-[#F2F2F2] bg-white">
-        <div className="mx-auto flex h-16 w-full max-w-[480px] items-center justify-between px-4">
+        <div className="mx-auto flex h-16 w-full max-w-[640px] items-center justify-between px-4">
           <p className="text-xl font-bold lowercase tracking-tight text-[#C6017F]">fiestamas</p>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-[#717B99] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
-              onClick={handleSignOut}
-            >
-              Cerrar sesión
-            </Button>
             {showAdminNav && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => navigate("/admin")}
-                className="border-[#C6017F] text-[#C6017F] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
+                className="h-8 border-[#C6017F] px-3 text-xs text-[#C6017F] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
               >
                 Admin
               </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5221D6] text-sm font-bold text-white outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[#5221D6]"
+                  aria-label="Menú de cuenta"
+                >
+                  {getEmailInitials(userEmail)}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[10rem]">
+                <DropdownMenuItem className="cursor-pointer" onClick={() => void handleSignOut()}>
+                  Cerrar sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[480px] space-y-6 px-4 pb-24 pt-20">
+      <main className="mx-auto w-full max-w-[640px] space-y-6 px-4 pb-28 pt-[calc(4rem+16px)]">
         {isLoading && (
-          <section className="space-y-3">
-            <Skeleton className="h-[220px] w-full rounded-2xl" />
-            <Skeleton className="h-24 w-full rounded-2xl" />
+          <section className="space-y-6">
+            <Skeleton className="h-48 w-full rounded-[20px]" />
             <Skeleton className="h-24 w-full rounded-2xl" />
             <Skeleton className="h-24 w-full rounded-2xl" />
           </section>
@@ -798,41 +866,54 @@ const DashboardContent = () => {
           </div>
         )}
 
-        {!isLoading && !isError && (
+        {!isLoading && !isError && orderedContacts.length === 0 && (
+          <div className="flex min-h-[calc(100vh-12rem)] flex-col items-center justify-center px-4 py-12 text-center">
+            <span className="text-[80px] leading-none" aria-hidden>
+              🎂
+            </span>
+            <h2 className="mt-6 text-xl font-bold text-[#141413]">Aún no tienes contactos</h2>
+            <p className="mt-2 max-w-sm text-sm text-[#717B99]">
+              Guarda los cumpleaños de las personas que más quieres
+            </p>
+            <Button
+              type="button"
+              className="mt-8 h-12 rounded-full bg-[#C6017F] px-8 text-white hover:bg-[#B10072]"
+              onClick={openCreateDialog}
+            >
+              Agregar el primero
+            </Button>
+          </div>
+        )}
+
+        {!isLoading && !isError && orderedContacts.length > 0 && (
           <>
-            {orderedContacts.length > 0 && (() => {
+            {(() => {
               const heroContact = todayBirthdays.length > 0 ? todayBirthdays[0] : orderedContacts[0];
               const isToday = todayBirthdays.length > 0;
               const days = heroContact.daysUntilBirthday;
-              const badgeLabel = isToday ? "Hoy 🎂" : `En ${days} día${days === 1 ? "" : "s"} 🎂`;
+              const badgeLabel = isToday ? "🎂 Hoy es su día" : `🎂 En ${days} día${days === 1 ? "" : "s"}`;
               return (
-                <section>
-                  <div className="relative overflow-hidden rounded-2xl" style={{ height: 280 }}>
-                    <img
-                      src="/birthday-hero.jpg"
-                      alt="Cumpleaños"
-                      style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-black/10" />
-                    <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-                      <span
-                        className="mb-2 inline-block rounded-full px-3 py-1 text-xs font-bold text-white"
-                        style={{ backgroundColor: isToday ? "#C6017F" : "rgba(255,255,255,0.2)", backdropFilter: "blur(4px)" }}
-                      >
+                <section className="mx-0 mt-4 sm:mx-0">
+                  <div
+                    className="relative overflow-hidden rounded-[20px] p-6"
+                    style={{
+                      marginLeft: 0,
+                      marginRight: 0,
+                      backgroundImage: "linear-gradient(135deg, rgba(198,1,127,0.92) 0%, rgba(82,33,214,0.92) 100%), url(/birthday-hero.jpg)",
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }}
+                  >
+                    <div className="relative z-10 flex flex-col items-start text-left">
+                      <span className="inline-flex rounded-full bg-[rgba(255,255,255,0.2)] px-3 py-1 text-xs font-semibold text-white">
                         {badgeLabel}
                       </span>
-                      <p className="text-[32px] font-bold leading-tight text-white">{heroContact.name}</p>
+                      <p className="mt-3 text-[28px] font-bold leading-tight text-white">{heroContact.name}</p>
+                      <p className="mt-1 text-sm text-[rgba(255,255,255,0.8)]">{formatBirthday(heroContact.birthday)}</p>
                       <button
                         type="button"
                         onClick={() => openCongratModal(heroContact)}
-                        className="mt-3 font-semibold text-white"
-                        style={{
-                          backgroundColor: "#C6017F",
-                          borderRadius: 24,
-                          padding: "12px 32px",
-                          border: "none",
-                          cursor: "pointer",
-                        }}
+                        className="mt-4 h-11 shrink-0 rounded-full bg-white px-6 text-sm font-semibold text-[#C6017F]"
                       >
                         Felicitar 🎉
                       </button>
@@ -844,20 +925,16 @@ const DashboardContent = () => {
 
             {todayContacts.length > 0 && (
               <section className="space-y-3">
-                <h2 className="text-base font-bold text-[#2E2D2C]">Hoy 🎂</h2>
+                <h2 className="text-base font-bold text-[#141413]">Hoy 🎂</h2>
                 <div className="space-y-3">
                   {todayContacts.map((contact) => (
-                    <ContactCard
+                    <SectionBirthdayCard
                       key={contact.id}
                       contact={contact}
                       days={0}
-                      badgeBg="#C6017F"
-                      badgeText="white"
-                      badgeLabel="¡Hoy!"
-                      avatarBg="#C6017F"
-                      onCongrat={() => openCongratModal(contact)}
-                      onEdit={() => openEditContact(contact)}
-                      onDelete={() => openDeleteConfirm(contact)}
+                      variant="today"
+                      onFelicitar={() => openCongratModal(contact)}
+                      onSugerirRegalo={() => openGiftBudgetModal(contact)}
                     />
                   ))}
                 </div>
@@ -866,22 +943,18 @@ const DashboardContent = () => {
 
             {thisMonthContacts.length > 0 && (
               <section className="space-y-3">
-                <h2 className="text-base font-bold text-[#2E2D2C]">Este mes 🎉</h2>
+                <h2 className="text-base font-bold text-[#141413]">Este mes 🎉</h2>
                 <div className="space-y-3">
                   {thisMonthContacts.map((contact) => {
                     const days = getDaysUntil(contact.birthday);
                     return (
-                      <ContactCard
+                      <SectionBirthdayCard
                         key={contact.id}
                         contact={contact}
                         days={days}
-                        badgeBg="#FFF0F9"
-                        badgeText="#C6017F"
-                        badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
-                        avatarBg="#C6017F"
-                        onCongrat={() => openCongratModal(contact)}
-                        onEdit={() => openEditContact(contact)}
-                        onDelete={() => openDeleteConfirm(contact)}
+                        variant="month"
+                        onFelicitar={() => openCongratModal(contact)}
+                        onSugerirRegalo={() => openGiftBudgetModal(contact)}
                       />
                     );
                   })}
@@ -891,23 +964,12 @@ const DashboardContent = () => {
 
             {upcomingContacts.length > 0 && (
               <section className="space-y-3">
-                <h2 className="text-base font-bold text-[#2E2D2C]">Próximos 📅</h2>
+                <h2 className="text-base font-bold text-[#141413]">Próximos 📅</h2>
                 <div className="space-y-3">
                   {upcomingContacts.map((contact) => {
                     const days = getDaysUntil(contact.birthday);
                     return (
-                      <ContactCard
-                        key={contact.id}
-                        contact={contact}
-                        days={days}
-                        badgeBg="#F5F5F5"
-                        badgeText="#717B99"
-                        badgeLabel={`en ${days} día${days === 1 ? "" : "s"}`}
-                        avatarBg="#C6017F"
-                        onCongrat={() => openCongratModal(contact)}
-                        onEdit={() => openEditContact(contact)}
-                        onDelete={() => openDeleteConfirm(contact)}
-                      />
+                      <SectionBirthdayCard key={contact.id} contact={contact} days={days} variant="upcoming" />
                     );
                   })}
                 </div>
@@ -915,23 +977,33 @@ const DashboardContent = () => {
             )}
 
             <section className="space-y-3">
-              <h2 className="text-base font-bold text-[#2E2D2C]">Tus contactos</h2>
-              {orderedContacts.length === 0 ? (
-                <p className="rounded-2xl bg-[#FAFAFA] p-5 text-sm text-[#717B99]">
-                  Aún no tienes contactos, agrega el primero 👇
+              <h2 className="text-base font-bold text-[#141413]">
+                Tus contactos ({orderedContacts.length})
+              </h2>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#717B99]" />
+                <Input
+                  type="search"
+                  placeholder="Buscar..."
+                  value={contactSearch}
+                  onChange={(e) => setContactSearch(e.target.value)}
+                  className="h-11 rounded-xl border-[#E5E5E5] pl-9 focus-visible:border-[#C6017F] focus-visible:ring-1 focus-visible:ring-[#C6017F]"
+                  aria-label="Buscar contactos"
+                />
+              </div>
+              {filteredContacts.length === 0 ? (
+                <p className="rounded-2xl bg-white py-8 text-center text-sm text-[#717B99] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+                  Ningún contacto coincide con la búsqueda
                 </p>
               ) : (
-                <div className="rounded-2xl border border-[#F2F2F2] bg-white">
-                  {orderedContacts.map((contact) => (
-                    <div
-                      key={contact.id}
-                      className="flex w-full items-center gap-3 border-b border-[#F2F2F2] p-4 last:border-b-0"
-                    >
+                <div className="divide-y divide-[#F2F2F2] overflow-hidden rounded-2xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+                  {filteredContacts.map((contact) => (
+                    <div key={contact.id} className="flex w-full items-center gap-3 p-4">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#5221D6] text-sm font-bold text-white">
                         {getInitials(contact.name)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold text-[#2E2D2C]">{contact.name}</p>
+                        <p className="truncate font-bold text-[#141413]">{contact.name}</p>
                         <p className="truncate text-xs text-[#717B99]">{contact.phone || "Sin teléfono"}</p>
                         <p className="text-xs text-[#717B99]">{formatBirthday(contact.birthday)}</p>
                       </div>
@@ -965,8 +1037,9 @@ const DashboardContent = () => {
 
       <Button
         size="icon"
-        className="fixed bottom-6 right-6 z-30 h-14 w-14 rounded-full bg-[#C6017F] text-3xl text-white shadow-[0_4px_20px_rgba(198,1,127,0.4)] hover:bg-[#B10072]"
+        className="fixed bottom-6 right-6 z-30 h-14 w-14 rounded-full border-0 bg-[#C6017F] text-2xl text-white shadow-[0_4px_20px_rgba(198,1,127,0.5)] transition-transform hover:scale-[1.08] hover:bg-[#B10072]"
         onClick={openCreateDialog}
+        aria-label="Agregar contacto"
       >
         +
       </Button>
@@ -1115,7 +1188,8 @@ const DashboardContent = () => {
       <CongratModal
         contact={congratContact}
         open={isCongratModalOpen}
-        onClose={() => setIsCongratModalOpen(false)}
+        onClose={closeCongratModal}
+        initialGiftView={congratOpenGift ? "budget" : "main"}
       />
     </div>
   );
