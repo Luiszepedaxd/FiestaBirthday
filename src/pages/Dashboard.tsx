@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarIcon, Loader2, Search } from "lucide-react";
+import { CalendarIcon, ChevronDown, Loader2, Search } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,6 +30,11 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +70,82 @@ type GiftSuggestionItem = {
   price: string;
   buscarEn: string;
 };
+
+type ParsedSavedGiftHistory = {
+  dateIso: string;
+  budget: number | null;
+  items: GiftSuggestionItem[];
+};
+
+function normalizeStoredGiftRow(raw: unknown): GiftSuggestionItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const title = o.title ?? o.titulo;
+  if (title === undefined || title === null || String(title).trim() === "") return null;
+  return {
+    title: String(title),
+    description: String(o.description ?? o.descripcion ?? ""),
+    price: String(o.price ?? o.precio ?? ""),
+    buscarEn: String(o.buscar_en ?? o.buscarEn ?? ""),
+  };
+}
+
+function parseContactGiftHistory(giftHistory: unknown): ParsedSavedGiftHistory | null {
+  if (!giftHistory || typeof giftHistory !== "object") return null;
+  const gh = giftHistory as { date?: unknown; budget?: unknown; suggestions?: unknown };
+  if (typeof gh.date !== "string" || !Array.isArray(gh.suggestions)) return null;
+  const items = gh.suggestions
+    .map(normalizeStoredGiftRow)
+    .filter((x): x is GiftSuggestionItem => x != null);
+  if (items.length === 0) return null;
+  let budget: number | null = null;
+  if (typeof gh.budget === "number" && !Number.isNaN(gh.budget)) budget = gh.budget;
+  return { dateIso: gh.date, budget, items };
+}
+
+function GiftSuggestionCard({ item }: { item: GiftSuggestionItem }) {
+  return (
+    <div
+      className="rounded-xl border border-[#F9E0F3] border-l-[3px] bg-[#FFF0F9] p-4"
+      style={{ borderLeftColor: "#C6017F" }}
+    >
+      <p className="font-bold text-[#2E2D2C]">{item.title}</p>
+      <p className="mt-1 text-xs text-[#717B99]">{item.description}</p>
+      <span className="mt-2 inline-block rounded-full bg-[#C6017F] px-3 py-1 text-xs font-semibold text-white">
+        {item.price}
+      </span>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <a
+          href={`https://www.amazon.com.mx/s?k=${encodeURIComponent(item.buscarEn)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+          style={{ borderColor: "#FF9900", color: "#FF9900" }}
+        >
+          🛒 Amazon
+        </a>
+        <a
+          href={`https://listado.mercadolibre.com.mx/${encodeURIComponent(item.buscarEn)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+          style={{ borderColor: "#FFE600", color: "#333333", backgroundColor: "#FFE600" }}
+        >
+          🏪 Mercado Libre
+        </a>
+        <a
+          href={`https://www.google.com.mx/search?q=${encodeURIComponent(`${item.buscarEn} comprar mexico`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
+          style={{ borderColor: "#4285F4", color: "#4285F4" }}
+        >
+          🔍 Google
+        </a>
+      </div>
+    </div>
+  );
+}
 
 function parseGiftSuggestionsContent(raw: string): GiftSuggestionItem[] {
   let text = raw.trim();
@@ -271,6 +352,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
   const [budgetInput, setBudgetInput] = useState("");
   const [budgetPill, setBudgetPill] = useState<(typeof BUDGET_PILLS)[number]["id"] | null>(null);
   const [giftSuggestionsFromProfile, setGiftSuggestionsFromProfile] = useState(false);
+  const [savedHistoryExpanded, setSavedHistoryExpanded] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -280,6 +362,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
       setBudgetInput("");
       setBudgetPill(null);
       setGiftSuggestionsFromProfile(false);
+      setSavedHistoryExpanded(false);
       return;
     }
     setGiftView(initialGiftView);
@@ -288,6 +371,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
     setBudgetInput("");
     setBudgetPill(null);
     setGiftSuggestionsFromProfile(false);
+    setSavedHistoryExpanded(false);
   }, [open, contact?.id, initialGiftView]);
 
   const handleWhatsApp = () => {
@@ -389,27 +473,29 @@ Historial de regalos previos: ${historial}`;
       if (!raw) throw new Error("empty_content");
 
       const items = parseGiftSuggestionsContent(raw);
+      const suggestions = items.map((i) => ({
+        titulo: i.title,
+        descripcion: i.description,
+        precio: i.price,
+        buscar_en: i.buscarEn,
+      }));
+      const { error: giftSaveError } = await supabase
+        .from("contacts")
+        .update({
+          gift_history: {
+            date: new Date().toISOString(),
+            budget: presupuesto,
+            suggestions,
+          },
+        })
+        .eq("id", contact.id);
+      if (giftSaveError) throw giftSaveError;
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
+
       setGiftItems(items);
       setGiftSuggestionsFromProfile(usedProfileInterests);
       setGiftView("results");
       setGiftPhase("idle");
-
-      const giftHistory = {
-        date: new Date().toISOString(),
-        suggestions: items.map((i) => ({
-          titulo: i.title,
-          descripcion: i.description,
-          precio: i.price,
-          buscar_en: i.buscarEn,
-        })),
-      };
-      const { error: giftSaveError } = await supabase
-        .from("contacts")
-        .update({ gift_history: giftHistory })
-        .eq("id", contact.id);
-      if (!giftSaveError) {
-        await queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      }
     } catch {
       setGiftPhase("error");
       setGiftItems([]);
@@ -418,6 +504,15 @@ Historial de regalos previos: ${historial}`;
   };
 
   if (!contact) return null;
+
+  const savedGiftHistory = parseContactGiftHistory(contact.gift_history);
+  let savedHistoryDateLabel: string | null = null;
+  if (savedGiftHistory) {
+    const d = new Date(savedGiftHistory.dateIso);
+    if (!Number.isNaN(d.getTime())) {
+      savedHistoryDateLabel = `Generadas el ${format(d, "d 'de' MMMM", { locale: es })}`;
+    }
+  }
 
   const giftLoading = giftPhase === "loading";
   const budgetNum = Number.parseFloat(budgetInput.replace(",", ".").trim());
@@ -510,6 +605,49 @@ Historial de regalos previos: ${historial}`;
             </button>
 
           </div>
+
+          {savedGiftHistory ? (
+            <Collapsible open={savedHistoryExpanded} onOpenChange={setSavedHistoryExpanded} className="mt-4">
+              <div className="rounded-[12px] bg-[#FAF9F5] p-3">
+                <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[#C6017F] focus-visible:ring-offset-2">
+                  <span className="text-sm font-semibold text-[#141413]">💡 Últimas sugerencias guardadas</span>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-[#717B99] transition-transform ${savedHistoryExpanded ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-3 space-y-3">
+                  {savedHistoryDateLabel ? (
+                    <p className="text-[12px] text-[#717B99]">{savedHistoryDateLabel}</p>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {savedGiftHistory.budget != null ? (
+                      <span className="inline-flex rounded-full border border-[#C6017F] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#C6017F]">
+                        Presupuesto: ${savedGiftHistory.budget} MXN
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="space-y-3">
+                    {savedGiftHistory.items.map((item, i) => (
+                      <GiftSuggestionCard key={`${item.title}-${i}`} item={item} />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGiftView("budget");
+                      setGiftPhase("idle");
+                      setBudgetInput("");
+                      setBudgetPill(null);
+                    }}
+                    className="w-full rounded-full border border-[#C6017F] bg-white py-2 text-center text-xs font-semibold text-[#C6017F] transition-colors hover:bg-[#FFF0F9]"
+                  >
+                    Generar nuevas
+                  </button>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          ) : null}
         </div>
         )}
 
@@ -616,46 +754,7 @@ Historial de regalos previos: ${historial}`;
 
           <div className="space-y-4">
             {giftItems.map((item, i) => (
-              <div
-                key={`${item.title}-${i}`}
-                className="rounded-xl border border-[#F9E0F3] border-l-[3px] bg-[#FFF0F9] p-4"
-                style={{ borderLeftColor: "#C6017F" }}
-              >
-                <p className="font-bold text-[#2E2D2C]">{item.title}</p>
-                <p className="mt-1 text-xs text-[#717B99]">{item.description}</p>
-                <span className="mt-2 inline-block rounded-full bg-[#C6017F] px-3 py-1 text-xs font-semibold text-white">
-                  {item.price}
-                </span>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <a
-                    href={`https://www.amazon.com.mx/s?k=${encodeURIComponent(item.buscarEn)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
-                    style={{ borderColor: "#FF9900", color: "#FF9900" }}
-                  >
-                    🛒 Amazon
-                  </a>
-                  <a
-                    href={`https://listado.mercadolibre.com.mx/${encodeURIComponent(item.buscarEn)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
-                    style={{ borderColor: "#FFE600", color: "#333333", backgroundColor: "#FFE600" }}
-                  >
-                    🏪 Mercado Libre
-                  </a>
-                  <a
-                    href={`https://www.google.com.mx/search?q=${encodeURIComponent(`${item.buscarEn} comprar mexico`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium"
-                    style={{ borderColor: "#4285F4", color: "#4285F4" }}
-                  >
-                    🔍 Google
-                  </a>
-                </div>
-              </div>
+              <GiftSuggestionCard key={`${item.title}-${i}`} item={item} />
             ))}
           </div>
         </div>
@@ -1406,7 +1505,11 @@ const DashboardContent = () => {
       </AlertDialog>
 
       <CongratModal
-        contact={congratContact}
+        contact={
+          congratContact
+            ? (orderedContacts.find((c) => c.id === congratContact.id) ?? congratContact)
+            : null
+        }
         open={isCongratModalOpen}
         onClose={closeCongratModal}
         initialGiftView={congratOpenGift ? "budget" : "main"}
