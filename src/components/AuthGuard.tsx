@@ -29,7 +29,7 @@ export const AuthGuard = ({ children }: AuthGuardProps) => {
   }
 
   if (!hasSession) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;

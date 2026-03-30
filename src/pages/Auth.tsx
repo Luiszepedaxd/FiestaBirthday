@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -33,11 +33,43 @@ type AuthLocationState = {
   tab?: AuthTab;
 };
 
+function tabFromSearch(search: string): AuthTab | null {
+  const param = new URLSearchParams(search).get("tab");
+  if (param === "register" || param === "login") return param;
+  return null;
+}
+
+/** Rutas dedicadas /login y /signup (sin depender de ?tab=). */
+function tabFromPathname(pathname: string): AuthTab | null {
+  if (pathname === "/signup") return "register";
+  if (pathname === "/login") return "login";
+  return null;
+}
+
+function deriveActiveTab(
+  pathname: string,
+  search: string,
+  stateTab: AuthTab | undefined,
+): AuthTab {
+  const fromPath = tabFromPathname(pathname);
+  if (fromPath) return fromPath;
+  const fromSearch = tabFromSearch(search);
+  if (fromSearch) return fromSearch;
+  if (stateTab === "register") return "register";
+  return "login";
+}
+
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const initialState = (location.state as AuthLocationState | null)?.tab;
-  const [activeTab, setActiveTab] = useState<AuthTab>(initialState === "register" ? "register" : "login");
+  const stateTab = (location.state as AuthLocationState | null)?.tab;
+  const [activeTab, setActiveTab] = useState<AuthTab>(() =>
+    deriveActiveTab(location.pathname, location.search, stateTab),
+  );
+
+  useEffect(() => {
+    setActiveTab(deriveActiveTab(location.pathname, location.search, stateTab));
+  }, [location.pathname, location.search, stateTab]);
   const [registerLoading, setRegisterLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
