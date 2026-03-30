@@ -114,18 +114,15 @@ function Navbar() {
 
 function HeroCard({
   card,
-  delay,
+  floatClass,
 }: {
   card: ContactCard;
-  delay: string;
+  floatClass: string;
 }) {
   return (
     <div
-      style={{
-        ...styles.heroCard,
-        animationDelay: delay,
-      }}
-      className="hero-card"
+      style={styles.heroCard}
+      className={`hero-card ${floatClass}`}
     >
       <div style={styles.heroCardHeader}>
         <div
@@ -180,7 +177,7 @@ function FeatureCard({
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function LandingPage() {
+export default function Index() {
   useScrollReveal();
   const featuresRef = useRef<HTMLElement | null>(null);
 
@@ -234,7 +231,7 @@ export default function LandingPage() {
                 <HeroCard
                   key={card.name}
                   card={card}
-                  delay={`${i * 0.5}s`}
+                  floatClass={`hero-card-float-${i + 1}`}
                 />
               ))}
             </div>
@@ -311,7 +308,7 @@ export default function LandingPage() {
                     "Canción personalizada con IA",
                     "Prioridad en soporte",
                   ].map((f) => (
-                    <li key={f} style={styles.featureListItemWhite}>
+                    <li key={f} className="card-premium-list-item" style={styles.featureListItemWhite}>
                       <span style={styles.checkWhite}>✓</span> {f}
                     </li>
                   ))}
@@ -370,17 +367,38 @@ const CSS = `
                 transform 0.65s cubic-bezier(.22,1,.36,1);
   }
 
-  @keyframes fiestamas-landing-float {
+  @keyframes float {
     0%, 100% { transform: translateY(0px); }
-    50%       { transform: translateY(-10px); }
+    50% { transform: translateY(-8px); }
   }
 
   #fiestamas-landing .hero-card {
-    animation: fiestamas-landing-float 4s ease-in-out infinite;
-    transition: box-shadow 0.2s, transform 0.2s;
+    transition: box-shadow 0.2s;
+  }
+  #fiestamas-landing .hero-card-float-1 {
+    animation: float 3s ease-in-out infinite;
+  }
+  #fiestamas-landing .hero-card-float-2 {
+    animation: float 3s ease-in-out 0.5s infinite;
+  }
+  #fiestamas-landing .hero-card-float-3 {
+    animation: float 3s ease-in-out 1s infinite;
   }
   #fiestamas-landing .hero-card:hover {
     box-shadow: 0 20px 60px rgba(198,1,127,0.18) !important;
+  }
+
+  #fiestamas-landing #features {
+    padding-top: 80px;
+    padding-bottom: 80px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  @media (max-width: 640px) {
+    #fiestamas-landing #features {
+      padding-top: 48px;
+      padding-bottom: 48px;
+    }
   }
 
   #fiestamas-landing .feature-card {
@@ -397,6 +415,11 @@ const CSS = `
   #fiestamas-landing .pricing-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 24px 64px rgba(0,0,0,0.12) !important;
+  }
+
+  #fiestamas-landing .card-premium-list-item {
+    word-break: break-word;
+    font-size: 14px;
   }
 
   #fiestamas-landing a[href] {
@@ -640,10 +663,9 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: 0.5,
   },
 
-  /* Features */
+  /* Features — padding vertical vía CSS (#features) para 80px / 48px mobile */
   features: {
     background: "#FAF9F5",
-    padding: "96px 24px",
   },
   sectionInner: {
     maxWidth: 1120,
@@ -683,31 +705,31 @@ const styles: Record<string, CSSProperties> = {
     background: "#fff",
     border: "1px solid #F0F0F0",
     borderRadius: 16,
-    padding: "28px 24px",
+    padding: 32,
     textAlign: "left",
     boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
   },
   featureIcon: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     borderRadius: "50%",
     background: "rgba(198,1,127,0.08)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 22,
+    fontSize: 24,
     marginBottom: 16,
   },
   featureTitle: {
     fontWeight: 700,
-    fontSize: 16,
+    fontSize: 18,
     color: "#141413",
     marginBottom: 8,
   },
   featureDesc: {
     fontSize: 14,
     color: "#4D4D4C",
-    lineHeight: 1.65,
+    lineHeight: 1.7,
   },
 
   /* Pricing */
@@ -829,8 +851,9 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 14,
     color: "rgba(255,255,255,0.90)",
     display: "flex",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
+    wordBreak: "break-word",
   },
   checkWhite: {
     color: "#EFA9FA",
