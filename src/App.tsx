@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard.tsx";
 import Admin from "./pages/Admin.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import LegalPlaceholder from "./pages/LegalPlaceholder.tsx";
+import Onboarding from "./pages/Onboarding.tsx";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,14 @@ const App = () => (
         <Route path="/auth" element={<Auth />} />
         <Route path="/terms" element={<LegalPlaceholder title="Términos" />} />
         <Route path="/privacy" element={<LegalPlaceholder title="Privacidad" />} />
+        <Route
+          path="/onboarding"
+          element={
+            <AuthGuard>
+              <Onboarding />
+            </AuthGuard>
+          }
+        />
         <Route
           path="/dashboard"
           element={

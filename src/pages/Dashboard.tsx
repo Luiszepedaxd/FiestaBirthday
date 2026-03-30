@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CalendarIcon, Loader2, Search } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -46,6 +46,16 @@ import { type Contact, useContacts } from "@/hooks/useContacts";
 const dashboardQueryClient = new QueryClient();
 
 const ADMIN_EMAIL = "luis.j20000@gmail.com";
+
+const supportsContactPicker =
+  typeof navigator !== "undefined" &&
+  "contacts" in navigator &&
+  typeof window !== "undefined" &&
+  "ContactsManager" in window;
+
+function normalizeImportedPhone(tel: string): string {
+  return tel.replace(/[\s-]/g, "");
+}
 
 const OPENROUTER_SETTINGS_KEY = "openrouter_api_key";
 
@@ -260,6 +270,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
   const [giftItems, setGiftItems] = useState<GiftSuggestionItem[]>([]);
   const [budgetInput, setBudgetInput] = useState("");
   const [budgetPill, setBudgetPill] = useState<(typeof BUDGET_PILLS)[number]["id"] | null>(null);
+  const [giftSuggestionsFromProfile, setGiftSuggestionsFromProfile] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -268,6 +279,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
       setGiftItems([]);
       setBudgetInput("");
       setBudgetPill(null);
+      setGiftSuggestionsFromProfile(false);
       return;
     }
     setGiftView(initialGiftView);
@@ -275,6 +287,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
     setGiftItems([]);
     setBudgetInput("");
     setBudgetPill(null);
+    setGiftSuggestionsFromProfile(false);
   }, [open, contact?.id, initialGiftView]);
 
   const handleWhatsApp = () => {
@@ -318,8 +331,35 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
       const historial =
         contact.gift_history != null ? JSON.stringify(contact.gift_history) : "ninguno";
 
+      let interestsForPrompt = contact.interests || "no especificados";
+      let profileTastesNote = "";
+      let usedProfileInterests = false;
+
+      const phoneTrimmed = contact.phone?.trim();
+      if (phoneTrimmed) {
+        const { data: contactProfile, error: contactProfileError } = await supabase
+          .from("profiles")
+          .select("interest_categories, interest_tags, full_name")
+          .eq("phone", phoneTrimmed)
+          .single();
+
+        if (!contactProfileError && contactProfile) {
+          const cats = Array.isArray(contactProfile.interest_categories)
+            ? contactProfile.interest_categories
+            : [];
+          const tags = Array.isArray(contactProfile.interest_tags) ? contactProfile.interest_tags : [];
+          const merged = [...cats, ...tags].filter((x): x is string => typeof x === "string");
+          if (merged.length > 0) {
+            interestsForPrompt = merged.join(", ");
+            profileTastesNote =
+              "\nNota: Esta persona registró sus propios gustos en la app.";
+            usedProfileInterests = true;
+          }
+        }
+      }
+
       const userContent = `Nombre: ${contact.name}. 
-Intereses: ${contact.interests || "no especificados"}. 
+Intereses: ${interestsForPrompt}.${profileTastesNote}
 Presupuesto: $${presupuesto} MXN.
 Historial de regalos previos: ${historial}`;
 
@@ -350,6 +390,7 @@ Historial de regalos previos: ${historial}`;
 
       const items = parseGiftSuggestionsContent(raw);
       setGiftItems(items);
+      setGiftSuggestionsFromProfile(usedProfileInterests);
       setGiftView("results");
       setGiftPhase("idle");
 
@@ -372,6 +413,7 @@ Historial de regalos previos: ${historial}`;
     } catch {
       setGiftPhase("error");
       setGiftItems([]);
+      setGiftSuggestionsFromProfile(false);
     }
   };
 
@@ -563,6 +605,15 @@ Historial de regalos previos: ${historial}`;
             Volver
           </button>
 
+          {giftSuggestionsFromProfile && (
+            <p
+              className="mb-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              style={{ backgroundColor: "#FFF0F9", color: "#C6017F" }}
+            >
+              ✨ Basado en sus gustos reales
+            </p>
+          )}
+
           <div className="space-y-4">
             {giftItems.map((item, i) => (
               <div
@@ -644,17 +695,41 @@ const DashboardContent = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [congratOpenGift, setCongratOpenGift] = useState(false);
+  const [onboardingReady, setOnboardingReady] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+  const importQueueRef = useRef<{ name: string; phone: string }[]>([]);
+  const importIndexRef = useRef(0);
+  const importActiveRef = useRef(false);
 
   useEffect(() => {
     const load = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      setShowAdminNav(user?.email === ADMIN_EMAIL);
-      setUserEmail(user?.email ?? null);
+      if (!user) {
+        setOnboardingReady(true);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("onboarding_completed")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!profileError && (!profile || profile.onboarding_completed !== true)) {
+        navigate("/onboarding", { replace: true });
+        return;
+      }
+
+      setShowAdminNav(user.email === ADMIN_EMAIL);
+      setUserEmail(user.email ?? null);
+      setOnboardingReady(true);
     };
     void load();
-  }, []);
+  }, [navigate]);
 
   const openCongratModal = (contact: Contact) => {
     setCongratOpenGift(false);
@@ -737,10 +812,33 @@ const DashboardContent = () => {
       if (insertError) throw insertError;
     },
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
+
+      if (importActiveRef.current) {
+        const queue = importQueueRef.current;
+        const idx = importIndexRef.current;
+        if (idx + 1 < queue.length) {
+          importIndexRef.current = idx + 1;
+          const next = queue[idx + 1];
+          setImportProgress({ current: idx + 2, total: queue.length });
+          setSubmitError(null);
+          reset({
+            name: next.name,
+            phone: next.phone,
+            interests: "",
+            birthday: undefined,
+          });
+          return;
+        }
+        importActiveRef.current = false;
+        importQueueRef.current = [];
+        importIndexRef.current = 0;
+        setImportProgress(null);
+      }
+
       setIsFormDrawerOpen(false);
       setSelectedContact(null);
       reset({ name: "", phone: "", interests: "", birthday: undefined });
-      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
     onError: (mutationError) => {
       setSubmitError(mutationError instanceof Error ? mutationError.message : "Error al guardar el contacto");
@@ -786,12 +884,70 @@ const DashboardContent = () => {
     navigate("/");
   };
 
+  const clearContactImportFlow = () => {
+    importActiveRef.current = false;
+    importQueueRef.current = [];
+    importIndexRef.current = 0;
+    setImportProgress(null);
+  };
+
+  const handleFormDialogOpenChange = (open: boolean) => {
+    setIsFormDrawerOpen(open);
+    if (!open) {
+      clearContactImportFlow();
+    }
+  };
+
   const openCreateDialog = () => {
+    clearContactImportFlow();
     setSubmitError(null);
     setFormMode("create");
     setSelectedContact(null);
     reset({ name: "", phone: "", interests: "", birthday: undefined });
     setIsFormDrawerOpen(true);
+  };
+
+  const handleImportContacts = async () => {
+    if (!supportsContactPicker || !navigator.contacts) return;
+    try {
+      const picked = await navigator.contacts.select(["name", "tel"], { multiple: true });
+      if (!picked?.length) return;
+
+      const prepared: { name: string; phone: string }[] = [];
+      for (const c of picked) {
+        const name = c.name?.[0]?.trim();
+        const rawTel = c.tel?.[0];
+        const phone = rawTel ? normalizeImportedPhone(rawTel) : "";
+        if (name && phone) prepared.push({ name, phone });
+      }
+      if (prepared.length === 0) return;
+
+      importActiveRef.current = true;
+      importQueueRef.current = prepared;
+      importIndexRef.current = 0;
+      setImportProgress(
+        prepared.length > 1 ? { current: 1, total: prepared.length } : null,
+      );
+      setSubmitError(null);
+      setFormMode("create");
+      setSelectedContact(null);
+      reset({
+        name: prepared[0].name,
+        phone: prepared[0].phone,
+        interests: "",
+        birthday: undefined,
+      });
+      setIsFormDrawerOpen(true);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "NotAllowedError") {
+        toast("Permisos denegados para acceder a contactos");
+        return;
+      }
+      if (e instanceof DOMException && e.name === "AbortError") {
+        return;
+      }
+      toast("No se pudieron importar los contactos");
+    }
   };
 
   const openEditContact = (contact: Contact) => {
@@ -810,6 +966,17 @@ const DashboardContent = () => {
     setSubmitError(null);
     saveContactMutation.mutate(values);
   };
+
+  if (!onboardingReady) {
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center bg-[#FAF9F5]"
+        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-[#C6017F]" aria-hidden />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1014,9 +1181,20 @@ const DashboardContent = () => {
             )}
 
             <section className="space-y-3">
-              <h2 className="text-base font-bold text-[#141413]">
-                Tus contactos ({orderedContacts.length})
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-bold text-[#141413]">
+                  Tus contactos ({orderedContacts.length})
+                </h2>
+                {supportsContactPicker ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleImportContacts()}
+                    className="shrink-0 rounded-full border border-[#5221D6] bg-white px-3 py-1.5 text-[12px] font-medium text-[#5221D6] transition-colors hover:bg-[#5221D6]/5"
+                  >
+                    📱 Importar contactos
+                  </button>
+                ) : null}
+              </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#717B99]" />
                 <Input
@@ -1081,7 +1259,7 @@ const DashboardContent = () => {
         +
       </Button>
 
-      <Dialog open={isFormDrawerOpen} onOpenChange={setIsFormDrawerOpen}>
+      <Dialog open={isFormDrawerOpen} onOpenChange={handleFormDialogOpenChange}>
         <DialogContent className="w-full h-full max-w-full m-0 rounded-none sm:rounded-2xl sm:max-w-md sm:h-auto sm:m-auto overflow-y-auto p-0">
           <DialogTitle className="sr-only">
             {formMode === "create" ? "Nuevo contacto" : "Editar contacto"}
@@ -1100,6 +1278,11 @@ const DashboardContent = () => {
                 ? "Completa los datos para guardar el contacto."
                 : "Actualiza la información del contacto seleccionado."}
             </p>
+            {formMode === "create" && importProgress ? (
+              <p className="mb-4 text-center text-xs font-medium text-[#717B99]">
+                Contacto {importProgress.current} de {importProgress.total}
+              </p>
+            ) : null}
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-[#2E2D2C]">Nombre</Label>
@@ -1181,7 +1364,7 @@ const DashboardContent = () => {
                 variant="outline"
                 type="button"
                 className="h-12 w-full rounded-xl"
-                onClick={() => setIsFormDrawerOpen(false)}
+                onClick={() => handleFormDialogOpenChange(false)}
               >
                 Cancelar
               </Button>
