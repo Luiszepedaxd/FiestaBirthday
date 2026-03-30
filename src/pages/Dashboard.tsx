@@ -895,28 +895,38 @@ const DashboardContent = () => {
               return (
                 <section className="mx-0 mt-4 sm:mx-0">
                   <div
-                    className="relative overflow-hidden rounded-[20px] p-6"
+                    className="relative overflow-hidden"
                     style={{
-                      marginLeft: 0,
-                      marginRight: 0,
-                      backgroundImage: "linear-gradient(135deg, rgba(198,1,127,0.92) 0%, rgba(82,33,214,0.92) 100%), url(/birthday-hero.jpg)",
+                      backgroundImage: "url(/birthday-hero.jpg)",
                       backgroundSize: "cover",
                       backgroundPosition: "center",
+                      borderRadius: "20px",
                     }}
                   >
-                    <div className="relative z-10 flex flex-col items-start text-left">
-                      <span className="inline-flex rounded-full bg-[rgba(255,255,255,0.2)] px-3 py-1 text-xs font-semibold text-white">
-                        {badgeLabel}
-                      </span>
-                      <p className="mt-3 text-[28px] font-bold leading-tight text-white">{heroContact.name}</p>
-                      <p className="mt-1 text-sm text-[rgba(255,255,255,0.8)]">{formatBirthday(heroContact.birthday)}</p>
-                      <button
-                        type="button"
-                        onClick={() => openCongratModal(heroContact)}
-                        className="mt-4 h-11 shrink-0 rounded-full bg-white px-6 text-sm font-semibold text-[#C6017F]"
-                      >
-                        Felicitar 🎉
-                      </button>
+                    <div
+                      className="pointer-events-none absolute inset-0"
+                      style={{
+                        borderRadius: "20px",
+                        background:
+                          "linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 50%)",
+                      }}
+                      aria-hidden
+                    />
+                    <div className="relative z-10 flex min-h-[220px] flex-col justify-end p-6">
+                      <div className="flex flex-col items-start text-left">
+                        <span className="inline-flex rounded-full bg-[rgba(255,255,255,0.2)] px-3 py-1 text-xs font-semibold text-white">
+                          {badgeLabel}
+                        </span>
+                        <p className="mt-3 text-[28px] font-bold leading-tight text-white">{heroContact.name}</p>
+                        <p className="mt-1 text-sm text-[rgba(255,255,255,0.8)]">{formatBirthday(heroContact.birthday)}</p>
+                        <button
+                          type="button"
+                          onClick={() => openCongratModal(heroContact)}
+                          className="mt-4 h-11 shrink-0 rounded-full bg-white px-6 text-sm font-semibold text-[#C6017F]"
+                        >
+                          Felicitar 🎉
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
