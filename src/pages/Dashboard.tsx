@@ -71,6 +71,29 @@ type GiftSuggestionItem = {
   buscarEn: string;
 };
 
+/** Respuesta de la Edge Function search-products (prueba temporal) */
+type MlSearchProduct = {
+  id: string;
+  title: string;
+  price: number;
+  currency: string;
+  image: string;
+  link: string;
+  condition: string;
+};
+
+function formatMlPriceMxN(product: MlSearchProduct): string {
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      maximumFractionDigits: 0,
+    }).format(product.price);
+  } catch {
+    return `$${product.price} MXN`;
+  }
+}
+
 type ParsedSavedGiftHistory = {
   dateIso: string;
   budget: number | null;
@@ -103,7 +126,13 @@ function parseContactGiftHistory(giftHistory: unknown): ParsedSavedGiftHistory |
   return { dateIso: gh.date, budget, items };
 }
 
-function GiftSuggestionCard({ item }: { item: GiftSuggestionItem }) {
+function GiftSuggestionCard({
+  item,
+  mlProducts,
+}: {
+  item: GiftSuggestionItem;
+  mlProducts?: MlSearchProduct[];
+}) {
   return (
     <div
       className="rounded-xl border border-[#F9E0F3] border-l-[3px] bg-[#FFF0F9] p-4"
@@ -143,6 +172,25 @@ function GiftSuggestionCard({ item }: { item: GiftSuggestionItem }) {
           🔍 Google
         </a>
       </div>
+      {mlProducts && mlProducts.length > 0 ? (
+        <div className="mt-2 flex gap-2 overflow-x-auto py-2">
+          {mlProducts.map((p) => (
+            <a
+              key={p.id}
+              href={p.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-[104px] shrink-0 flex-col gap-1 no-underline"
+            >
+              <img src={p.image} alt="" className="h-20 w-20 rounded-lg object-cover" />
+              <p className="line-clamp-2 text-[12px] leading-tight text-[#2E2D2C]">{p.title}</p>
+              <p className="text-[13px] font-bold leading-tight text-[#C6017F]">
+                {formatMlPriceMxN(p)}
+              </p>
+            </a>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -353,6 +401,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
   const [budgetPill, setBudgetPill] = useState<(typeof BUDGET_PILLS)[number]["id"] | null>(null);
   const [giftSuggestionsFromProfile, setGiftSuggestionsFromProfile] = useState(false);
   const [savedHistoryExpanded, setSavedHistoryExpanded] = useState(false);
+  const [mlProductsByIndex, setMlProductsByIndex] = useState<Record<number, MlSearchProduct[]>>({});
 
   useEffect(() => {
     if (!open) {
@@ -363,6 +412,7 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
       setBudgetPill(null);
       setGiftSuggestionsFromProfile(false);
       setSavedHistoryExpanded(false);
+      setMlProductsByIndex({});
       return;
     }
     setGiftView(initialGiftView);
@@ -372,7 +422,40 @@ const CongratModal = ({ contact, open, onClose, initialGiftView = "main" }: Cong
     setBudgetPill(null);
     setGiftSuggestionsFromProfile(false);
     setSavedHistoryExpanded(false);
+    setMlProductsByIndex({});
   }, [open, contact?.id, initialGiftView]);
+
+  useEffect(() => {
+    if (!open || giftView !== "results" || giftItems.length === 0) {
+      if (open && giftView !== "results") setMlProductsByIndex({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const next: Record<number, MlSearchProduct[]> = {};
+      await Promise.all(
+        giftItems.map(async (suggestion, index) => {
+          const query = suggestion.buscarEn?.trim();
+          if (!query) return;
+          try {
+            const { data, error } = await supabase.functions.invoke<{ products?: MlSearchProduct[] }>(
+              "search-products",
+              { body: { query } },
+            );
+            if (cancelled) return;
+            if (error || !data?.products?.length) return;
+            next[index] = data.products;
+          } catch {
+            /* prueba ML: sin mensaje */
+          }
+        }),
+      );
+      if (!cancelled) setMlProductsByIndex(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, giftView, giftItems]);
 
   const handleWhatsApp = () => {
     if (!contact) return;
@@ -754,7 +837,11 @@ Historial de regalos previos: ${historial}`;
 
           <div className="space-y-4">
             {giftItems.map((item, i) => (
-              <GiftSuggestionCard key={`${item.title}-${i}`} item={item} />
+              <GiftSuggestionCard
+                key={`${item.title}-${i}`}
+                item={item}
+                mlProducts={mlProductsByIndex[i]}
+              />
             ))}
           </div>
         </div>
