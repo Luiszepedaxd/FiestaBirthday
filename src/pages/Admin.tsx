@@ -53,6 +53,13 @@ const FEATURES: {
     title: "Mensaje WhatsApp",
     desc: "Genera mensaje personalizado de felicitación",
   },
+  {
+    key: "smart_seating",
+    icon: "🪑",
+    title: "Smart Seating IA",
+    desc: "Modelo para el chat conversacional de distribución de mesas",
+    promptPlaceholder: "Eres el asistente de Smart Seating de Fiestamas...",
+  },
 ];
 
 type AiConfigRow = {

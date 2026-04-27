@@ -5,10 +5,13 @@ import { SeatingCanvas } from "./SeatingCanvas";
 import {
   useSeatingEvents,
   useSeatingGuests,
+  useSeatingRelations,
   useCreateSeatingEvent,
   useUpsertGuests,
+  useUpsertRelations,
   useUpdateGuestTable,
   type SeatingGuest,
+  type SeatingRelation,
 } from "@/hooks/useSeating";
 import { supabase } from "@/lib/supabase";
 
@@ -33,6 +36,8 @@ export function SmartSeating() {
   const createEvent = useCreateSeatingEvent();
   const upsertGuests = useUpsertGuests();
   const updateGuestTable = useUpdateGuestTable();
+  const { data: relations = [] } = useSeatingRelations(activeEventId);
+  const upsertRelations = useUpsertRelations();
 
   const activeEvent = events.find(e => e.id === activeEventId);
 
@@ -87,6 +92,11 @@ export function SmartSeating() {
   const handleSaveLayout = () => {
     // Layout auto-saves on every drag via updateGuestTable
   };
+
+  // upsertRelations will be wired in the next prompt (Prompt #4) to persist
+  // AI-detected tension/affinity relations from the chat JSON to Supabase
+  void upsertRelations;
+  void SeatingRelation;
 
   // STEP: LIST
   if (step === "list") {
@@ -274,6 +284,7 @@ export function SmartSeating() {
         </div>
         <SeatingCanvas
           guests={guests}
+          relations={relations}
           tablesCount={activeEvent.tables_count}
           seatsPerTable={activeEvent.seats_per_table}
           onMoveGuest={handleMoveGuest}

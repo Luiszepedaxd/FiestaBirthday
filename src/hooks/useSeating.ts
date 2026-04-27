@@ -100,6 +100,43 @@ export const useUpsertGuests = () => {
   });
 };
 
+export const useSeatingRelations = (eventId: string | null) => {
+  return useQuery({
+    queryKey: ["seating_relations", eventId],
+    enabled: !!eventId,
+    queryFn: async () => {
+      if (!eventId) return [] as SeatingRelation[];
+      const { data, error } = await supabase
+        .from("seating_relations")
+        .select("*")
+        .eq("event_id", eventId);
+      if (error) throw error;
+      return (data ?? []) as SeatingRelation[];
+    },
+  });
+};
+
+export const useUpsertRelations = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      relations,
+      eventId,
+    }: {
+      relations: Omit<SeatingRelation, "id">[];
+      eventId: string;
+    }) => {
+      if (relations.length === 0) return eventId;
+      const { error } = await supabase.from("seating_relations").insert(relations);
+      if (error) throw error;
+      return eventId;
+    },
+    onSuccess: (eventId) => {
+      void queryClient.invalidateQueries({ queryKey: ["seating_relations", eventId] });
+    },
+  });
+};
+
 export const useCreateSeatingEvent = () => {
   const queryClient = useQueryClient();
   return useMutation({
