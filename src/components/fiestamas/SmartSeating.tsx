@@ -52,15 +52,30 @@ export function SmartSeating() {
     setStep("chat");
   };
 
-  const handleGuestsExtracted = async (extracted: ExtractedGuest[]) => {
+  const handleGuestsExtracted = async (
+    extracted: ExtractedGuest[],
+    rawRelations: {
+      guest_a: string;
+      guest_b: string;
+      type: string;
+      strength: number;
+      notes: string | null;
+    }[],
+  ) => {
     if (!activeEventId) return;
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const seatsPerTable = activeEvent?.seats_per_table ?? 8;
     const tablesCount = activeEvent?.tables_count ?? 8;
 
-    const groupOrder = ["familia", "pareja", "amigos_novio", "amigos_novia", "trabajo", "hobby", "otro"];
+    const groupOrder = [
+      "familia", "pareja", "amigos_novio", "amigos_novia",
+      "trabajo", "hobby", "otro",
+    ];
+
     const sorted = [...extracted].sort((a, b) => {
       const ai = groupOrder.indexOf(a.group_tag ?? "otro");
       const bi = groupOrder.indexOf(b.group_tag ?? "otro");
@@ -70,18 +85,69 @@ export function SmartSeating() {
     let tc = 1, sc = 0;
     const final = sorted.map(g => {
       if (tc > tablesCount) {
-        return { ...g, event_id: activeEventId, user_id: user.id, table_number: null, seat_position: null };
+        return {
+          ...g,
+          event_id: activeEventId,
+          user_id: user.id,
+          table_number: null,
+          seat_position: null,
+        };
       }
       const tn = tc;
       sc++;
       if (sc >= seatsPerTable) { tc++; sc = 0; }
-      return { ...g, event_id: activeEventId, user_id: user.id, table_number: tn, seat_position: sc };
+      return {
+        ...g,
+        event_id: activeEventId,
+        user_id: user.id,
+        table_number: tn,
+        seat_position: sc,
+      };
     });
 
-    await upsertGuests.mutateAsync({
+    const savedGuests = await upsertGuests.mutateAsync({
       guests: final as Omit<SeatingGuest, "id" | "created_at">[],
       eventId: activeEventId,
     });
+
+    if (rawRelations.length > 0 && savedGuests && savedGuests.length > 0) {
+      const nameToId = new Map<string, string>();
+      for (const g of savedGuests) {
+        nameToId.set(g.name.toLowerCase(), g.id);
+        const first = g.name.split(" ")[0]?.toLowerCase();
+        if (first) nameToId.set(first, g.id);
+      }
+
+      const relationsToSave: Omit<SeatingRelation, "id">[] = [];
+      for (const r of rawRelations) {
+        const aId = nameToId.get(r.guest_a.toLowerCase())
+          ?? nameToId.get(r.guest_a.split(" ")[0]?.toLowerCase() ?? "");
+        const bId = nameToId.get(r.guest_b.toLowerCase())
+          ?? nameToId.get(r.guest_b.split(" ")[0]?.toLowerCase() ?? "");
+        if (!aId || !bId || aId === bId) continue;
+
+        const validTypes = ["tension", "afinidad", "pareja", "familia", "compañeros"] as const;
+        const relType = validTypes.includes(r.type as typeof validTypes[number])
+          ? (r.type as typeof validTypes[number])
+          : "tension";
+
+        relationsToSave.push({
+          event_id: activeEventId,
+          guest_a_id: aId,
+          guest_b_id: bId,
+          relation_type: relType,
+          strength: r.strength ?? 1,
+          notes: r.notes ?? null,
+        });
+      }
+
+      if (relationsToSave.length > 0) {
+        await upsertRelations.mutateAsync({
+          relations: relationsToSave,
+          eventId: activeEventId,
+        });
+      }
+    }
   };
 
   const handleMoveGuest = (guestId: string, tableNumber: number | null) => {
@@ -92,11 +158,6 @@ export function SmartSeating() {
   const handleSaveLayout = () => {
     // Layout auto-saves on every drag via updateGuestTable
   };
-
-  // upsertRelations will be wired in the next prompt (Prompt #4) to persist
-  // AI-detected tension/affinity relations from the chat JSON to Supabase
-  void upsertRelations;
-  void SeatingRelation;
 
   // STEP: LIST
   if (step === "list") {
@@ -253,7 +314,7 @@ export function SmartSeating() {
             eventId={activeEvent.id}
             eventName={activeEvent.name}
             existingGuests={guests}
-            onGuestsExtracted={(extracted) => void handleGuestsExtracted(extracted)}
+            onGuestsExtracted={(extracted, rawRelations) => void handleGuestsExtracted(extracted, rawRelations)}
             onChatComplete={() => setStep("canvas")}
           />
         </div>

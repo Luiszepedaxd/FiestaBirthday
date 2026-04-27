@@ -89,13 +89,25 @@ export const useUpdateGuestTable = () => {
 export const useUpsertGuests = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ guests, eventId }: { guests: Omit<SeatingGuest, "id" | "created_at">[]; eventId: string }) => {
-      const { error } = await supabase.from("seating_guests").insert(guests);
+    mutationFn: async ({
+      guests,
+      eventId,
+    }: {
+      guests: Omit<SeatingGuest, "id" | "created_at">[];
+      eventId: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("seating_guests")
+        .insert(guests)
+        .select("id, name, group_tag, table_number, seat_position, event_id, user_id, age_approx, is_single, comes_with_partner, notes");
       if (error) throw error;
-      return eventId;
+      return (data ?? []) as SeatingGuest[];
     },
-    onSuccess: (eventId) => {
-      void queryClient.invalidateQueries({ queryKey: ["seating_guests", eventId] });
+    onSuccess: (savedGuests) => {
+      const eventId = savedGuests[0]?.event_id;
+      if (eventId) {
+        void queryClient.invalidateQueries({ queryKey: ["seating_guests", eventId] });
+      }
     },
   });
 };

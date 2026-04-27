@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Send, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { type SeatingGuest } from "@/hooks/useSeating";
@@ -24,11 +25,19 @@ type UserContact = {
   interests: string | null;
 };
 
+type RawRelation = {
+  guest_a: string;
+  guest_b: string;
+  type: string;
+  strength: number;
+  notes: string | null;
+};
+
 type Props = {
   eventId: string;
   eventName: string;
   existingGuests: SeatingGuest[];
-  onGuestsExtracted: (guests: ExtractedGuest[]) => void;
+  onGuestsExtracted: (guests: ExtractedGuest[], relations: RawRelation[]) => void;
   onChatComplete: () => void;
 };
 
@@ -94,6 +103,20 @@ Si el usuario solo está platicando, responde SOLO con texto conversacional, sin
 export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsExtracted, onChatComplete }: Props) {
   const { orderedContacts = [] } = useContacts();
 
+  const { data: aiConfig } = useQuery({
+    queryKey: ["ai_config", "smart_seating"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ai_config")
+        .select("model, prompt")
+        .eq("feature", "smart_seating")
+        .maybeSingle();
+      return data as { model: string; prompt: string } | null;
+    },
+  });
+
+  const aiModel = aiConfig?.model ?? "google/gemini-2.0-flash-exp:free";
+
   const userContacts: UserContact[] = orderedContacts.map(c => ({
     name: c.name,
     phone: c.phone,
@@ -149,7 +172,7 @@ export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsE
           "HTTP-Referer": window.location.origin,
         },
         body: JSON.stringify({
-          model: "google/gemini-2.0-flash-exp:free",
+          model: aiModel,
           messages: [
             { role: "system", content: systemPrompt },
             ...newMessages.map(m => ({ role: m.role, content: m.content })),
@@ -173,14 +196,14 @@ export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsE
           const parsed = JSON.parse(jsonMatch[0]) as {
             ready: boolean;
             guests: ExtractedGuest[];
-            relations: unknown[];
+            relations?: RawRelation[];
           };
           if (parsed.ready && parsed.guests?.length > 0) {
             setMessages(prev => [...prev, {
               role: "assistant",
               content: `¡Perfecto! Identifiqué **${parsed.guests.length} invitados** y sus conexiones. Generando el layout inteligente de mesas... 🎯`,
             }]);
-            onGuestsExtracted(parsed.guests);
+            onGuestsExtracted(parsed.guests, (parsed.relations ?? []) as RawRelation[]);
             setTimeout(() => onChatComplete(), 1500);
             return;
           }
