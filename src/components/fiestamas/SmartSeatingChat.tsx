@@ -74,7 +74,8 @@ REGLAS DE CONVERSACIÓN:
 7. Sé curioso sobre tensiones: "Oye, ¿Carlos e Itzel se llevan bien o mejor los separo?" 😏
 
 CUANDO EL USUARIO DIGA QUE ESTÁ LISTO O PIDA VER LAS MESAS:
-Responde SOLAMENTE con este JSON exacto, sin texto antes ni después, sin markdown, sin backticks:
+CRÍTICO: Responde ÚNICAMENTE con el bloque JSON. Cero texto antes. Cero texto después.
+Sin frases como "¡Claro!" ni "¿Qué te parece?". Sin markdown. Sin backticks. SOLO el JSON:
 {
   "ready": true,
   "guests": [
@@ -193,7 +194,9 @@ export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsE
 
       const raw = json.choices?.[0]?.message?.content ?? "";
 
-      const jsonMatch = raw.match(/\{[\s\S]*?"ready"\s*:\s*true[\s\S]*?\}/);
+      // Extraer el bloque JSON más grande que contenga "ready": true
+      // funciona aunque la IA ponga texto antes o después del JSON
+      const jsonMatch = raw.match(/\{[\s\S]*"ready"\s*:\s*true[\s\S]*\}/);
       if (jsonMatch) {
         setIsProcessing(true);
         try {
