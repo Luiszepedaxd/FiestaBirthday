@@ -107,7 +107,7 @@ Si el usuario solo está platicando, responde SOLO con texto conversacional, sin
 export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsExtracted, onChatComplete }: Props) {
   const { orderedContacts = [] } = useContacts();
 
-  const { data: aiConfig } = useQuery({
+  const { data: aiConfig, isLoading: aiConfigLoading } = useQuery({
     queryKey: ["ai_config", "smart_seating"],
     queryFn: async () => {
       const { data } = await supabase
@@ -145,7 +145,7 @@ export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsE
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || aiConfigLoading) return;
 
     const newMessages: Message[] = [...messages, { role: "user", content: text }];
     setMessages(newMessages);
@@ -328,7 +328,8 @@ export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsE
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Escribe aquí..."
+            placeholder={aiConfigLoading ? "Cargando configuración..." : "Escribe aquí..."}
+            disabled={aiConfigLoading}
             rows={1}
             className="flex-1 resize-none bg-transparent text-[13.5px] text-[#2E2D2C] placeholder:text-[#A1A1A0] outline-none"
             style={{ maxHeight: "80px" }}
@@ -336,7 +337,7 @@ export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsE
           <button
             type="button"
             onClick={() => void sendMessage()}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || aiConfigLoading}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#C6017F] text-white disabled:opacity-40 transition-opacity"
           >
             <Send className="h-3.5 w-3.5" />
