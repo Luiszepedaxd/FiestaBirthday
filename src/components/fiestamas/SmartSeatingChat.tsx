@@ -41,7 +41,7 @@ type Props = {
   onChatComplete: () => void;
 };
 
-function buildSystemPrompt(contacts: UserContact[], eventName: string): string {
+function buildSystemPrompt(contacts: UserContact[], eventName: string, basePrompt?: string | null): string {
   const contactsBlock = contacts.length > 0
     ? `\n\nCONTACTOS DEL USUARIO EN SU AGENDA (${contacts.length} personas):\n${contacts
         .map(c => {
@@ -52,7 +52,11 @@ function buildSystemPrompt(contacts: UserContact[], eventName: string): string {
         .join("\n")}\n\nUSA ESTOS NOMBRES REALES en tus preguntas. Por ejemplo: "Oye, veo que tienes a ${contacts[0]?.name ?? "alguien"} en tu agenda, ¿va al evento?". No inventes nombres nuevos — trabaja con esta lista.`
     : "";
 
-  return `Eres el asistente de Smart Seating de Fiestamas. Tu trabajo es ayudar al organizador a distribuir a sus invitados en mesas para "${eventName}", de forma conversacional y natural — como una plática entre amigos, no un interrogatorio.
+  const corePrompt = basePrompt?.trim()
+    ? basePrompt.trim()
+    : `Eres el asistente de Smart Seating de Fiestamas. Tu trabajo es ayudar al organizador a distribuir a sus invitados en mesas para "${eventName}", de forma conversacional y natural — como una plática entre amigos, no un interrogatorio.`;
+
+  return `${corePrompt}
 
 OBJETIVO SECRETO: Mientras platicas, construyes un grafo social de los invitados. Por cada persona necesitas inferir silenciosamente:
 - Su grupo de pertenencia (familia, trabajo, amigos_novio, amigos_novia, hobby, pareja, otro)
@@ -162,7 +166,7 @@ export function SmartSeatingChat({ eventId, eventName, existingGuests, onGuestsE
         ? `\n\n[YA REGISTRADOS EN ESTE EVENTO: ${existingGuests.map(g => g.name).join(", ")}]`
         : "";
 
-      const systemPrompt = buildSystemPrompt(userContacts, eventName) + existingNote;
+      const systemPrompt = buildSystemPrompt(userContacts, eventName, aiConfig?.prompt) + existingNote;
 
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
