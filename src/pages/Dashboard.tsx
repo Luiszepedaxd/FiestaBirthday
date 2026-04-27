@@ -47,6 +47,7 @@ import { es } from "date-fns/locale";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabase";
 import { type Contact, useContacts } from "@/hooks/useContacts";
+import { SmartSeating } from "@/components/fiestamas/SmartSeating";
 
 const dashboardQueryClient = new QueryClient();
 
@@ -1431,6 +1432,13 @@ const DashboardContent = () => {
                   ))}
                 </div>
               )}
+            </section>
+
+            {/* Smart Seating Section */}
+            <section className="space-y-3">
+              <div className="rounded-2xl border border-[#F2F2F2] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+                <SmartSeating />
+              </div>
             </section>
           </>
         )}
