@@ -1,19 +1,36 @@
 import { motion } from "framer-motion";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { PRODUCT_MAP_CENTER_COLOR } from "./constants";
+import {
+  getNodeTooltipText,
+  getStatusColor,
+  isVisuallyUntracked,
+} from "@/lib/product-map-status";
+import type { ProductMapStatus } from "@/types/product-map";
 
 type ProductMapNodeBubbleProps = {
   name: string;
-  color: string;
+  status: ProductMapStatus;
+  calculatedProgress: number | null;
   isCenter?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
   onClick?: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   animationDelay?: number;
-  /** Inside React Flow: no button/motion entrance (avoids 0-size / invisible nodes). */
   variant?: "default" | "flow";
 };
+
+const sizePx = {
+  sm: 64,
+  md: 96,
+  lg: 144,
+} as const;
 
 const sizeClasses = {
   sm: "h-16 w-16 text-[10px]",
@@ -21,21 +38,105 @@ const sizeClasses = {
   lg: "h-28 w-28 text-sm sm:h-36 sm:w-36 sm:text-base",
 };
 
-const bubbleClassName = (
-  size: ProductMapNodeBubbleProps["size"],
-  isCenter: boolean,
-  className?: string,
-) =>
-  cn(
-    "flex shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-white p-2 text-center font-semibold leading-tight text-white shadow-lg outline-none ring-offset-2 transition-shadow focus-visible:ring-2 focus-visible:ring-[#C6017F] focus-visible:ring-offset-[#FAF8F5]",
-    sizeClasses[size ?? "md"],
-    isCenter && "shadow-xl ring-2 ring-[#C6017F]/30",
-    className,
+function ProgressDonut({
+  size,
+  progress,
+  strokeColor,
+}: {
+  size: number;
+  progress: number;
+  strokeColor: string;
+}) {
+  const strokeWidth = 4;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (progress / 100) * circumference;
+  const center = size / 2;
+
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0"
+      width={size}
+      height={size}
+      aria-hidden
+    >
+      <circle
+        cx={center}
+        cy={center}
+        r={radius}
+        fill="none"
+        stroke="#E5E5E5"
+        strokeWidth={strokeWidth}
+      />
+      <circle
+        cx={center}
+        cy={center}
+        r={radius}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={dashOffset}
+        transform={`rotate(-90 ${center} ${center})`}
+        className="transition-[stroke-dashoffset] duration-500 ease-out"
+      />
+    </svg>
   );
+}
+
+function BubbleContent({
+  name,
+  status,
+  calculatedProgress,
+  isCenter,
+  size,
+  className,
+  dimmed,
+}: {
+  name: string;
+  status: ProductMapStatus;
+  calculatedProgress: number | null;
+  isCenter: boolean;
+  size: ProductMapNodeBubbleProps["size"];
+  className?: string;
+  dimmed: boolean;
+}) {
+  const effectiveStatus: ProductMapStatus = dimmed ? "untracked" : status;
+  const displayColor = getStatusColor(effectiveStatus);
+  const showProgressLabel =
+    isCenter && calculatedProgress !== null && !dimmed;
+
+  return (
+    <div
+      className={cn(
+        "relative flex shrink-0 flex-col items-center justify-center rounded-full border-2 border-white p-2 text-center font-semibold leading-tight text-white shadow-lg",
+        sizeClasses[size ?? "md"],
+        isCenter && !dimmed && "shadow-xl ring-2 ring-[#C6017F]/20",
+        dimmed && "opacity-60",
+        className,
+      )}
+      style={{
+        backgroundColor: displayColor,
+        boxShadow: dimmed
+          ? undefined
+          : `0 4px 16px ${displayColor}55`,
+      }}
+    >
+      <span className="line-clamp-2 px-1">{name}</span>
+      {showProgressLabel && (
+        <span className="mt-0.5 text-[10px] font-bold tabular-nums opacity-95 sm:text-xs">
+          {calculatedProgress}%
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function ProductMapNodeBubble({
   name,
-  color,
+  status,
+  calculatedProgress,
   isCenter = false,
   size = "md",
   className,
@@ -44,24 +145,45 @@ export function ProductMapNodeBubble({
   animationDelay = 0,
   variant = "default",
 }: ProductMapNodeBubbleProps) {
-  const displayColor = isCenter ? PRODUCT_MAP_CENTER_COLOR : color;
-  const style = {
-    backgroundColor: displayColor,
-    boxShadow: isCenter
-      ? `0 8px 32px ${PRODUCT_MAP_CENTER_COLOR}40`
-      : `0 4px 16px ${displayColor}55`,
-  };
+  const dimmed = isVisuallyUntracked(calculatedProgress) || status === "untracked";
+  const px = sizePx[size];
+  const effectiveStatus: ProductMapStatus = dimmed ? "untracked" : status;
+  const ringColor = getStatusColor(effectiveStatus);
+  const showRing = calculatedProgress !== null && !dimmed;
+  const tooltip = getNodeTooltipText(status, calculatedProgress);
+
+  const inner = (
+    <div className="relative flex items-center justify-center" style={{ width: px, height: px }}>
+      {showRing && (
+        <ProgressDonut size={px} progress={calculatedProgress} strokeColor={ringColor} />
+      )}
+      <BubbleContent
+        name={name}
+        status={status}
+        calculatedProgress={calculatedProgress}
+        isCenter={isCenter}
+        size={size}
+        className={className}
+        dimmed={dimmed}
+      />
+    </div>
+  );
+
+  const wrapped = (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="inline-flex">{inner}</div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="rounded-lg border-[#E5E5E5] bg-white text-[#2E2D2C]">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   if (variant === "flow") {
-    return (
-      <div
-        className={bubbleClassName(size, isCenter, className)}
-        style={style}
-        title={name}
-      >
-        <span className="line-clamp-3 px-1">{name}</span>
-      </div>
-    );
+    return <div className="cursor-pointer">{wrapped}</div>;
   }
 
   return (
@@ -74,11 +196,9 @@ export function ProductMapNodeBubble({
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={bubbleClassName(size, isCenter, className)}
-      style={style}
-      title={name}
+      className="cursor-pointer outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[#C6017F] focus-visible:ring-offset-[#FAF8F5]"
     >
-      <span className="line-clamp-3 px-1">{name}</span>
+      {wrapped}
     </motion.button>
   );
 }

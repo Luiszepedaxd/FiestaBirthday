@@ -15,7 +15,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
-import type { ProductMapNode } from "@/types/product-map";
+import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 import { ProductMapNodeBubble } from "./ProductMapNode";
 import { PRODUCT_MAP_BG } from "./constants";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,8 @@ const CANVAS_HEIGHT_PX = 520;
 
 type FlowNodeData = {
   label: string;
-  color: string;
+  status: ProductMapStatus;
+  calculatedProgress: number | null;
   isCenter: boolean;
   animationDelay: number;
 };
@@ -53,7 +54,8 @@ function ProductMapFlowNode({ data }: NodeProps<ProductMapFlowNodeType>) {
       />
       <ProductMapNodeBubble
         name={data.label}
-        color={data.color}
+        status={data.status}
+        calculatedProgress={data.calculatedProgress}
         isCenter={data.isCenter}
         size={data.isCenter ? "lg" : "md"}
         animationDelay={data.animationDelay ?? 0}
@@ -80,8 +82,8 @@ function getRadialRadius(childCount: number, isMobile: boolean): number {
 }
 
 function buildGraph(
-  centerNode: ProductMapNode,
-  childNodes: ProductMapNode[],
+  centerNode: ProductMapNodeWithProgress,
+  childNodes: ProductMapNodeWithProgress[],
   radius: number,
 ): { nodes: ProductMapFlowNodeType[]; edges: Edge[] } {
   const centerOffset = NODE_DIMENSIONS.center / 2;
@@ -94,7 +96,8 @@ function buildGraph(
       position: { x: -centerOffset, y: -centerOffset },
       data: {
         label: centerNode.name,
-        color: centerNode.color,
+        status: centerNode.status,
+        calculatedProgress: centerNode.calculated_progress,
         isCenter: true,
         animationDelay: 0,
       },
@@ -117,7 +120,8 @@ function buildGraph(
       position: { x: x - childOffset, y: y - childOffset },
       data: {
         label: child.name,
-        color: child.color,
+        status: child.status,
+        calculatedProgress: child.calculated_progress,
         isCenter: false,
         animationDelay: 0.05 + index * 0.04,
       },
@@ -138,14 +142,14 @@ function buildGraph(
 }
 
 type FlowCanvasInnerProps = {
-  centerNode: ProductMapNode;
-  childNodes: ProductMapNode[];
+  centerNode: ProductMapNodeWithProgress;
+  childNodes: ProductMapNodeWithProgress[];
   isLoading: boolean;
-  onSelectChild: (node: ProductMapNode) => void;
+  onSelectChild: (node: ProductMapNodeWithProgress) => void;
   onSelectCenter: () => void;
   canGoBack: boolean;
   onAddChild: () => void;
-  onNodeContextMenu: (node: ProductMapNode, event: React.MouseEvent) => void;
+  onNodeContextMenu: (node: ProductMapNodeWithProgress, event: React.MouseEvent) => void;
 };
 
 function FlowCanvasInner({

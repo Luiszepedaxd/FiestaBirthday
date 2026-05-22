@@ -1,14 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { getStatusColor } from "@/lib/product-map-status";
 import type {
   CreateProductMapNodeInput,
   DeleteProductMapNodeInput,
-  ProductMapNode,
+  ProductMapNodeWithProgress,
+  ProductMapStatus,
   UpdateProductMapNodeInput,
 } from "@/types/product-map";
 
-const NODE_COLUMNS =
-  "id, name, parent_id, color, position, description, created_at, updated_at, created_by";
+const NODE_VIEW = "product_map_nodes_with_progress";
+
+const NODE_VIEW_COLUMNS =
+  "id, name, parent_id, color, position, description, status, created_at, updated_at, created_by, calculated_progress, children_count, untracked_children_count";
 
 export const productMapKeys = {
   all: ["product-map"] as const,
@@ -16,21 +20,30 @@ export const productMapKeys = {
   root: ["product-map", "root"] as const,
   path: (nodeId: string) => ["product-map", "path", nodeId] as const,
   node: (nodeId: string) => ["product-map", "node", nodeId] as const,
+  globalProgress: ["product-map", "global-progress"] as const,
+  trackingStats: ["product-map", "tracking-stats"] as const,
 };
 
-async function fetchNodeById(nodeId: string): Promise<ProductMapNode> {
+function invalidateAllProductMapQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({
+    predicate: (query) =>
+      Array.isArray(query.queryKey) && query.queryKey[0] === productMapKeys.all[0],
+  });
+}
+
+async function fetchNodeById(nodeId: string): Promise<ProductMapNodeWithProgress> {
   const { data, error } = await supabase
-    .from("product_map_nodes")
-    .select(NODE_COLUMNS)
+    .from(NODE_VIEW)
+    .select(NODE_VIEW_COLUMNS)
     .eq("id", nodeId)
     .single();
 
   if (error) throw error;
-  return data as ProductMapNode;
+  return data as ProductMapNodeWithProgress;
 }
 
-async function fetchPathFromRoot(nodeId: string): Promise<ProductMapNode[]> {
-  const path: ProductMapNode[] = [];
+async function fetchPathFromRoot(nodeId: string): Promise<ProductMapNodeWithProgress[]> {
+  const path: ProductMapNodeWithProgress[] = [];
   let currentId: string | null = nodeId;
 
   while (currentId) {
@@ -46,15 +59,15 @@ export function useNodesByParent(parentId: string | null) {
   return useQuery({
     queryKey: productMapKeys.children(parentId),
     enabled: parentId !== null,
-    queryFn: async (): Promise<ProductMapNode[]> => {
+    queryFn: async (): Promise<ProductMapNodeWithProgress[]> => {
       const { data, error } = await supabase
-        .from("product_map_nodes")
-        .select(NODE_COLUMNS)
+        .from(NODE_VIEW)
+        .select(NODE_VIEW_COLUMNS)
         .eq("parent_id", parentId as string)
         .order("position", { ascending: true });
 
       if (error) throw error;
-      return (data ?? []) as ProductMapNode[];
+      return (data ?? []) as ProductMapNodeWithProgress[];
     },
   });
 }
@@ -62,17 +75,17 @@ export function useNodesByParent(parentId: string | null) {
 export function useRootNode() {
   return useQuery({
     queryKey: productMapKeys.root,
-    queryFn: async (): Promise<ProductMapNode | null> => {
+    queryFn: async (): Promise<ProductMapNodeWithProgress | null> => {
       const { data, error } = await supabase
-        .from("product_map_nodes")
-        .select(NODE_COLUMNS)
+        .from(NODE_VIEW)
+        .select(NODE_VIEW_COLUMNS)
         .is("parent_id", null)
         .order("position", { ascending: true })
         .limit(1)
         .maybeSingle();
 
       if (error) throw error;
-      return (data as ProductMapNode | null) ?? null;
+      return (data as ProductMapNodeWithProgress | null) ?? null;
     },
   });
 }
@@ -81,7 +94,7 @@ export function useNodePath(nodeId: string | null) {
   return useQuery({
     queryKey: productMapKeys.path(nodeId ?? ""),
     enabled: Boolean(nodeId),
-    queryFn: async (): Promise<ProductMapNode[]> => {
+    queryFn: async (): Promise<ProductMapNodeWithProgress[]> => {
       if (!nodeId) return [];
       return fetchPathFromRoot(nodeId);
     },
@@ -92,35 +105,64 @@ export function useProductMapNode(nodeId: string | null) {
   return useQuery({
     queryKey: productMapKeys.node(nodeId ?? ""),
     enabled: Boolean(nodeId),
-    queryFn: async (): Promise<ProductMapNode | null> => {
+    queryFn: async (): Promise<ProductMapNodeWithProgress | null> => {
       if (!nodeId) return null;
       return fetchNodeById(nodeId);
     },
   });
 }
 
-function invalidateNodeQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  parentId: string | null,
-  nodeId?: string,
-) {
-  void queryClient.invalidateQueries({ queryKey: productMapKeys.all });
-  void queryClient.invalidateQueries({ queryKey: productMapKeys.children(parentId) });
-  if (nodeId) {
-    void queryClient.invalidateQueries({ queryKey: productMapKeys.path(nodeId) });
-    void queryClient.invalidateQueries({ queryKey: productMapKeys.node(nodeId) });
-  }
-  void queryClient.invalidateQueries({ queryKey: productMapKeys.root });
+export function useGlobalProgress() {
+  return useQuery({
+    queryKey: productMapKeys.globalProgress,
+    queryFn: async (): Promise<{
+      progress: number | null;
+      root: ProductMapNodeWithProgress | null;
+    }> => {
+      const { data, error } = await supabase
+        .from(NODE_VIEW)
+        .select(NODE_VIEW_COLUMNS)
+        .is("parent_id", null)
+        .order("position", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      const root = (data as ProductMapNodeWithProgress | null) ?? null;
+      return {
+        progress: root?.calculated_progress ?? null,
+        root,
+      };
+    },
+  });
+}
+
+export function useMapTrackingStats() {
+  return useQuery({
+    queryKey: productMapKeys.trackingStats,
+    queryFn: async (): Promise<{ tracked: number; untracked: number }> => {
+      const { data, error } = await supabase.from(NODE_VIEW).select("status");
+
+      if (error) throw error;
+      const rows = (data ?? []) as { status: ProductMapStatus }[];
+      const untracked = rows.filter((r) => r.status === "untracked").length;
+      const tracked = rows.length - untracked;
+      return { tracked, untracked };
+    },
+  });
 }
 
 export function useCreateNode() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: CreateProductMapNodeInput): Promise<ProductMapNode> => {
+    mutationFn: async (input: CreateProductMapNodeInput): Promise<ProductMapNodeWithProgress> => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      const status: ProductMapStatus = input.status ?? "not_started";
+      const color = getStatusColor(status);
 
       const siblings = await supabase
         .from("product_map_nodes")
@@ -138,19 +180,20 @@ export function useCreateNode() {
         .insert({
           name: input.name,
           parent_id: input.parent_id,
-          color: input.color,
+          color,
+          status,
           position: nextPosition,
           description: input.description ?? null,
           created_by: user?.id ?? null,
         })
-        .select(NODE_COLUMNS)
+        .select("id")
         .single();
 
       if (error) throw error;
-      return data as ProductMapNode;
+      return fetchNodeById((data as { id: string }).id);
     },
-    onSuccess: (data) => {
-      invalidateNodeQueries(queryClient, data.parent_id, data.id);
+    onSuccess: () => {
+      invalidateAllProductMapQueries(queryClient);
     },
   });
 }
@@ -159,23 +202,29 @@ export function useUpdateNode() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: UpdateProductMapNodeInput): Promise<ProductMapNode> => {
-      const { data, error } = await supabase
+    mutationFn: async (input: UpdateProductMapNodeInput): Promise<ProductMapNodeWithProgress> => {
+      const payload: Record<string, string> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (input.name !== undefined) {
+        payload.name = input.name;
+      }
+      if (input.status !== undefined) {
+        payload.status = input.status;
+        payload.color = getStatusColor(input.status);
+      }
+
+      const { error } = await supabase
         .from("product_map_nodes")
-        .update({
-          name: input.name,
-          color: input.color,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", input.id)
-        .select(NODE_COLUMNS)
-        .single();
+        .update(payload)
+        .eq("id", input.id);
 
       if (error) throw error;
-      return data as ProductMapNode;
+      return fetchNodeById(input.id);
     },
-    onSuccess: (data) => {
-      invalidateNodeQueries(queryClient, data.parent_id, data.id);
+    onSuccess: () => {
+      invalidateAllProductMapQueries(queryClient);
     },
   });
 }
@@ -188,9 +237,8 @@ export function useDeleteNode() {
       const { error } = await supabase.from("product_map_nodes").delete().eq("id", input.id);
       if (error) throw error;
     },
-    onSuccess: (_data, variables) => {
-      invalidateNodeQueries(queryClient, variables.parent_id);
-      void queryClient.invalidateQueries({ queryKey: productMapKeys.all });
+    onSuccess: () => {
+      invalidateAllProductMapQueries(queryClient);
     },
   });
 }

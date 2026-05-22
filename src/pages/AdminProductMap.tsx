@@ -4,10 +4,13 @@ import { ArrowLeft, Plus, RotateCcw } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { useIsAdmin } from "@/lib/auth";
 import {
   useCreateNode,
   useDeleteNode,
+  useGlobalProgress,
+  useMapTrackingStats,
   useNodePath,
   useNodesByParent,
   useProductMapNode,
@@ -18,13 +21,13 @@ import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
 import { NodeEditDialog } from "@/components/product-map/NodeEditDialog";
 import { DeleteNodeDialog } from "@/components/product-map/DeleteNodeDialog";
-import { PRODUCT_MAP_BG, PRODUCT_MAP_PRESET_COLORS } from "@/components/product-map/constants";
-import type { ProductMapNode } from "@/types/product-map";
+import { PRODUCT_MAP_BG } from "@/components/product-map/constants";
+import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 
-type EditMode = "create" | "rename" | "color" | null;
+type EditMode = "create" | "edit" | null;
 
 type ContextMenuState = {
-  node: ProductMapNode;
+  node: ProductMapNodeWithProgress;
   x: number;
   y: number;
 };
@@ -33,10 +36,12 @@ const AdminProductMap = () => {
   const navigate = useNavigate();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
   const { data: root, isLoading: rootLoading, error: rootError } = useRootNode();
+  const { data: globalData, isLoading: globalLoading } = useGlobalProgress();
+  const { data: trackingStats } = useMapTrackingStats();
   const [focusId, setFocusId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>(null);
-  const [editTarget, setEditTarget] = useState<ProductMapNode | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ProductMapNode | null>(null);
+  const [editTarget, setEditTarget] = useState<ProductMapNodeWithProgress | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProductMapNodeWithProgress | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const centerId = focusId ?? root?.id ?? null;
@@ -52,6 +57,9 @@ const AdminProductMap = () => {
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
   const deleteNode = useDeleteNode();
+
+  const rootName = globalData?.root?.name ?? root?.name ?? "Mapa";
+  const globalProgress = globalData?.progress ?? root?.calculated_progress ?? null;
 
   useEffect(() => {
     if (!adminLoading && !isAdmin) {
@@ -104,51 +112,45 @@ const AdminProductMap = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canGoBack, goBack]);
 
-  const openCreateDialog = (parent: ProductMapNode) => {
+  const openCreateDialog = (parent: ProductMapNodeWithProgress) => {
     setEditTarget(parent);
     setEditMode("create");
     setContextMenu(null);
   };
 
-  const openRenameDialog = (node: ProductMapNode) => {
+  const openEditDialog = (node: ProductMapNodeWithProgress) => {
     setEditTarget(node);
-    setEditMode("rename");
+    setEditMode("edit");
     setContextMenu(null);
   };
 
-  const openColorDialog = (node: ProductMapNode) => {
-    setEditTarget(node);
-    setEditMode("color");
-    setContextMenu(null);
-  };
-
-  const openDeleteDialog = (node: ProductMapNode) => {
+  const openDeleteDialog = (node: ProductMapNodeWithProgress) => {
     setDeleteTarget(node);
     setContextMenu(null);
   };
 
-  const handleNodeContextMenu = (node: ProductMapNode, event: React.MouseEvent) => {
+  const handleNodeContextMenu = (node: ProductMapNodeWithProgress, event: React.MouseEvent) => {
     event.preventDefault();
     setContextMenu({ node, x: event.clientX, y: event.clientY });
   };
 
-  const handleEditSubmit = async (values: { name: string; color: string }) => {
-    if (!editTarget || !centerNode) return;
+  const handleEditSubmit = async (values: { name: string; status: ProductMapStatus }) => {
+    if (!editTarget) return;
 
     try {
       if (editMode === "create") {
         await createNode.mutateAsync({
           name: values.name,
           parent_id: editTarget.id,
-          color: values.color,
+          status: values.status,
         });
         toast.success("Nodo creado");
-      } else if (editMode === "rename" || editMode === "color") {
+      } else if (editMode === "edit") {
         await updateNode.mutateAsync({
           id: editTarget.id,
-          name: values.name,
-          color: values.color,
           parent_id: editTarget.parent_id,
+          name: values.name,
+          status: values.status,
         });
         toast.success("Nodo actualizado");
       }
@@ -184,6 +186,10 @@ const AdminProductMap = () => {
   const isPageLoading = adminLoading || rootLoading || !centerNode;
   const isGraphLoading = centerLoading || childrenLoading;
 
+  const progressBarValue = globalProgress ?? 0;
+  const progressLabel =
+    globalProgress === null ? "Sin tracking global" : `Avance global: ${globalProgress}%`;
+
   if (!adminLoading && !isAdmin) {
     return null;
   }
@@ -194,49 +200,73 @@ const AdminProductMap = () => {
       style={{ backgroundColor: PRODUCT_MAP_BG, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
       <header className="sticky top-0 z-40 border-b border-[#F2F2F2] bg-white/95 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-[#717B99] hover:text-[#C6017F]"
-              onClick={() => navigate("/admin")}
-              aria-label="Volver al admin"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            {isPageLoading ? (
-              <Skeleton className="h-5 w-48" />
-            ) : (
-              <ProductMapBreadcrumb
-                path={path}
-                onNavigate={(nodeId) => setFocusId(nodeId)}
-              />
-            )}
+        <div className="mx-auto w-full max-w-5xl px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-[#717B99] hover:text-[#C6017F]"
+                onClick={() => navigate("/admin")}
+                aria-label="Volver al admin"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              {isPageLoading ? (
+                <Skeleton className="h-5 w-48" />
+              ) : (
+                <ProductMapBreadcrumb
+                  path={path}
+                  onNavigate={(nodeId) => setFocusId(nodeId)}
+                />
+              )}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
+                onClick={resetToRoot}
+                disabled={!root || centerId === root.id}
+              >
+                <RotateCcw className="mr-1.5 h-4 w-4" />
+                Reset
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-xl bg-[#C6017F] hover:bg-[#B10072]"
+                onClick={() => centerNode && openCreateDialog(centerNode)}
+                disabled={!centerNode}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Agregar nodo
+              </Button>
+            </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
-              onClick={resetToRoot}
-              disabled={!root || centerId === root.id}
-            >
-              <RotateCcw className="mr-1.5 h-4 w-4" />
-              Reset
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="rounded-xl bg-[#C6017F] hover:bg-[#B10072]"
-              onClick={() => centerNode && openCreateDialog(centerNode)}
-              disabled={!centerNode}
-            >
-              <Plus className="mr-1.5 h-4 w-4" />
-              Agregar nodo
-            </Button>
+
+          <div className="mt-3 rounded-xl border border-[#F2F2F2] bg-[#FAF8F5] px-4 py-3">
+            {globalLoading ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-[#2E2D2C]">
+                  {rootName} · {progressLabel}
+                </p>
+                <Progress
+                  value={progressBarValue}
+                  className="mt-2 h-2.5 bg-[#E5E5E5] [&>div]:bg-[#C6017F]"
+                />
+                {trackingStats && (
+                  <p className="mt-2 text-xs text-[#717B99]">
+                    {trackingStats.tracked} pantallas con tracking · {trackingStats.untracked} sin
+                    tracking
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -283,16 +313,9 @@ const AdminProductMap = () => {
             <button
               type="button"
               className="w-full px-3 py-2 text-left text-sm hover:bg-[#FFF0F9]"
-              onClick={() => openRenameDialog(contextMenu.node)}
+              onClick={() => openEditDialog(contextMenu.node)}
             >
-              Renombrar
-            </button>
-            <button
-              type="button"
-              className="w-full px-3 py-2 text-left text-sm hover:bg-[#FFF0F9]"
-              onClick={() => openColorDialog(contextMenu.node)}
-            >
-              Cambiar color
+              Editar nodo
             </button>
             <hr className="my-1 border-[#F2F2F2]" />
             <button
@@ -315,35 +338,20 @@ const AdminProductMap = () => {
             setEditTarget(null);
           }
         }}
-        title={
-          editMode === "create"
-            ? "Nuevo nodo hijo"
-            : editMode === "rename"
-              ? "Renombrar nodo"
-              : "Cambiar color"
-        }
+        title={editMode === "create" ? "Nuevo nodo hijo" : "Editar nodo"}
         description={
           editMode === "create" && editTarget
             ? `Hijo de «${editTarget.name}»`
             : undefined
         }
         initialName={editMode === "create" ? "" : (editTarget?.name ?? "")}
-        initialColor={
-          editMode === "create"
-            ? PRODUCT_MAP_PRESET_COLORS[1]
-            : (editTarget?.color ?? PRODUCT_MAP_PRESET_COLORS[0])
+        initialStatus={
+          editMode === "create" ? "not_started" : (editTarget?.status ?? "not_started")
         }
+        hasChildren={editMode === "edit" ? (editTarget?.children_count ?? 0) > 0 : false}
         submitLabel={editMode === "create" ? "Crear" : "Guardar"}
         isSubmitting={createNode.isPending || updateNode.isPending}
-        onSubmit={(values) => {
-          if (editMode === "rename" && editTarget) {
-            void handleEditSubmit({ name: values.name, color: editTarget.color });
-          } else if (editMode === "color" && editTarget) {
-            void handleEditSubmit({ name: editTarget.name, color: values.color });
-          } else {
-            void handleEditSubmit(values);
-          }
-        }}
+        onSubmit={(values) => void handleEditSubmit(values)}
       />
 
       <DeleteNodeDialog

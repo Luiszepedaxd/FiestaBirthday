@@ -1,3 +1,12 @@
+export type ProductMapStatus =
+  | "untracked"
+  | "not_started"
+  | "lowest_fi"
+  | "design"
+  | "development"
+  | "qa"
+  | "completed";
+
 export interface ProductMapNode {
   id: string;
   name: string;
@@ -5,24 +14,31 @@ export interface ProductMapNode {
   color: string;
   position: number;
   description: string | null;
+  status: ProductMapStatus;
   created_at: string;
   updated_at: string;
   created_by: string | null;
 }
 
+export interface ProductMapNodeWithProgress extends ProductMapNode {
+  calculated_progress: number | null;
+  children_count: number;
+  untracked_children_count: number;
+}
+
 export type CreateProductMapNodeInput = {
   name: string;
   parent_id: string;
-  color: string;
   position?: number;
   description?: string | null;
+  status?: ProductMapStatus;
 };
 
 export type UpdateProductMapNodeInput = {
   id: string;
-  name: string;
-  color: string;
   parent_id: string | null;
+  name?: string;
+  status?: ProductMapStatus;
 };
 
 export type DeleteProductMapNodeInput = {
