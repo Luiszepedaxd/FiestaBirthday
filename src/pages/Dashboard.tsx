@@ -46,12 +46,11 @@ import { Calendar } from "@/components/ui/calendar";
 import { es } from "date-fns/locale";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabase";
+import { useIsAdmin } from "@/lib/auth";
 import { type Contact, useContacts } from "@/hooks/useContacts";
 import { SmartSeating } from "@/components/fiestamas/SmartSeating";
 
 const dashboardQueryClient = new QueryClient();
-
-const ADMIN_EMAIL = "luis.j20000@gmail.com";
 
 const supportsContactPicker =
   typeof navigator !== "undefined" &&
@@ -856,6 +855,7 @@ Historial de regalos previos: ${historial}`;
 const DashboardContent = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isAdmin } = useIsAdmin();
   const { isLoading, isError, error, orderedContacts } = useContacts();
 
   const todayContacts = orderedContacts.filter((c) => getDaysUntil(c.birthday) === 0);
@@ -878,7 +878,6 @@ const DashboardContent = () => {
   const [formMode, setFormMode] = useState<FormMode>("create");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [showAdminNav, setShowAdminNav] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [congratOpenGift, setCongratOpenGift] = useState(false);
@@ -911,7 +910,6 @@ const DashboardContent = () => {
         return;
       }
 
-      setShowAdminNav(user.email === ADMIN_EMAIL);
       setUserEmail(user.email ?? null);
       setOnboardingReady(true);
     };
@@ -1174,7 +1172,7 @@ const DashboardContent = () => {
         <div className="mx-auto flex h-16 w-full max-w-[640px] items-center justify-between px-4">
           <p className="text-xl font-bold lowercase tracking-tight text-[#C6017F]">fiestamas</p>
           <div className="flex items-center gap-2">
-            {showAdminNav && (
+            {isAdmin && (
               <Button
                 variant="outline"
                 size="sm"

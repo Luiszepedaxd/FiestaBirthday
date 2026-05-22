@@ -6,6 +6,7 @@ import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import Admin from "./pages/Admin.tsx";
+import AdminProductMap from "./pages/AdminProductMap.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import LegalPlaceholder from "./pages/LegalPlaceholder.tsx";
 import Onboarding from "./pages/Onboarding.tsx";
@@ -41,6 +42,14 @@ const App = () => (
           }
         />
         <Route path="/admin" element={<Admin />} />
+        <Route
+          path="/admin/mapa"
+          element={
+            <AuthGuard>
+              <AdminProductMap />
+            </AuthGuard>
+          }
+        />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

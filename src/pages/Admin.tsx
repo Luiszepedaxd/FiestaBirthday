@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/lib/supabase";
-
-const ADMIN_EMAIL = "luis.j20000@gmail.com";
+import { useIsAdmin } from "@/lib/auth";
 
 const OPENROUTER_SETTINGS_KEY = "openrouter_api_key";
 
@@ -78,7 +77,7 @@ const adminQueryClient = new QueryClient();
 const AdminContent = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [checking, setChecking] = useState(true);
+  const { isAdmin, isLoading: adminLoading } = useIsAdmin();
   const [localModels, setLocalModels] = useState<Record<string, string>>({});
   const [localPrompts, setLocalPrompts] = useState<Record<string, string>>({});
   const [savingFeature, setSavingFeature] = useState<string | null>(null);
@@ -92,20 +91,14 @@ const AdminContent = () => {
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
-    const check = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data.user?.email !== ADMIN_EMAIL) {
-        navigate("/dashboard", { replace: true });
-        return;
-      }
-      setChecking(false);
-    };
-    void check();
-  }, [navigate]);
+    if (!adminLoading && !isAdmin) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [adminLoading, isAdmin, navigate]);
 
   const { data: settingsRow } = useQuery({
     queryKey: ["settings", OPENROUTER_SETTINGS_KEY],
-    enabled: !checking,
+    enabled: isAdmin && !adminLoading,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("settings")
@@ -132,7 +125,7 @@ const AdminContent = () => {
 
   const { data: configs = [] } = useQuery<AiConfigRow[]>({
     queryKey: ["ai_config"],
-    enabled: !checking,
+    enabled: isAdmin && !adminLoading,
     queryFn: async () => {
       const { data, error } = await supabase.from("ai_config").select("feature, model, prompt");
       if (error) throw error;
@@ -270,7 +263,7 @@ const AdminContent = () => {
   const openrouterInputType =
     openrouterKeyDirty && !showOpenrouterKey ? "password" : "text";
 
-  if (checking) {
+  if (adminLoading || !isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C6017F] border-t-transparent" />
@@ -301,6 +294,15 @@ const AdminContent = () => {
         <p className="mt-1 text-sm text-[#717B99]">
           Configura el modelo de IA para cada feature
         </p>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-4 h-11 w-full rounded-[12px] border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
+          onClick={() => navigate("/admin/mapa")}
+        >
+          Mapa de producto →
+        </Button>
 
         {/* OpenRouter */}
         <div className="mt-6 rounded-xl border border-[#E5E5E5] bg-white p-4">
