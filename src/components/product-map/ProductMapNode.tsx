@@ -145,7 +145,7 @@ function BubbleContent({
   const showProgressLabel =
     isCenter && calculatedProgress !== null && !dimmed;
   const showPips =
-    isCenter && (childrenColors?.length ?? 0) > 0;
+    !isCenter && (childrenColors?.length ?? 0) > 0;
 
   return (
     <div

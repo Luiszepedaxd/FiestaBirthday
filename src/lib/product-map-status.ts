@@ -102,3 +102,27 @@ export function getNodeVisualColor(
   if (node.children_count > 0) return getColorByProgress(node.calculated_progress);
   return getStatusColor(node.status);
 }
+
+/** Map each parent id to visual colors of its direct children (for orbit pips). */
+export function buildChildrenColorsMap(
+  parentIds: string[],
+  childNodes: ProductMapNodeWithProgress[],
+): Record<string, string[]> {
+  const grouped: Record<string, ProductMapNodeWithProgress[]> = {};
+  for (const id of parentIds) grouped[id] = [];
+
+  for (const node of childNodes) {
+    const parentId = node.parent_id;
+    if (parentId && parentId in grouped) {
+      grouped[parentId].push(node);
+    }
+  }
+
+  const result: Record<string, string[]> = {};
+  for (const id of parentIds) {
+    result[id] = (grouped[id] ?? [])
+      .sort((a, b) => a.position - b.position)
+      .map(getNodeVisualColor);
+  }
+  return result;
+}

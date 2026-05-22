@@ -15,7 +15,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
-import { getNodeVisualColor } from "@/lib/product-map-status";
 import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 import { ProductMapNodeBubble } from "./ProductMapNode";
 import { PRODUCT_MAP_BG } from "./constants";
@@ -89,6 +88,7 @@ function getRadialRadius(childCount: number, isMobile: boolean): number {
 function buildGraph(
   centerNode: ProductMapNodeWithProgress,
   childNodes: ProductMapNodeWithProgress[],
+  childrenColorsByChildId: Record<string, string[]>,
   radius: number,
 ): { nodes: ProductMapFlowNodeType[]; edges: Edge[] } {
   const centerOffset = NODE_DIMENSIONS.center / 2;
@@ -106,7 +106,6 @@ function buildGraph(
         isCenter: true,
         animationDelay: 0,
         childrenCount: centerNode.children_count,
-        childrenColors: childNodes.map(getNodeVisualColor),
       },
       draggable: false,
       selectable: true,
@@ -132,6 +131,7 @@ function buildGraph(
         isCenter: false,
         animationDelay: 0.05 + index * 0.04,
         childrenCount: child.children_count,
+        childrenColors: childrenColorsByChildId[child.id] ?? [],
       },
       draggable: false,
       selectable: true,
@@ -152,6 +152,7 @@ function buildGraph(
 type FlowCanvasInnerProps = {
   centerNode: ProductMapNodeWithProgress;
   childNodes: ProductMapNodeWithProgress[];
+  childrenColorsByChildId: Record<string, string[]>;
   isLoading: boolean;
   onSelectChild: (node: ProductMapNodeWithProgress) => void;
   onSelectCenter: () => void;
@@ -163,6 +164,7 @@ type FlowCanvasInnerProps = {
 function FlowCanvasInner({
   centerNode,
   childNodes,
+  childrenColorsByChildId,
   isLoading,
   onSelectChild,
   onSelectCenter,
@@ -175,8 +177,8 @@ function FlowCanvasInner({
   const radius = getRadialRadius(childNodes.length, isMobile);
 
   const graph = useMemo(
-    () => buildGraph(centerNode, childNodes, radius),
-    [centerNode, childNodes, radius],
+    () => buildGraph(centerNode, childNodes, childrenColorsByChildId, radius),
+    [centerNode, childNodes, childrenColorsByChildId, radius],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<ProductMapFlowNodeType>([]);

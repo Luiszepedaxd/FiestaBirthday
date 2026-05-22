@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, CircleDot, GitBranch, Plus, RotateCcw } from "lucide-react";
@@ -20,6 +20,8 @@ import {
   useUpdateNode,
 } from "@/hooks/useProductMap";
 import { useAllProductMapNodes } from "@/hooks/useAllProductMapNodes";
+import { useNodesByParents } from "@/hooks/useNodesByParents";
+import { buildChildrenColorsMap } from "@/lib/product-map-status";
 import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
 import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
@@ -61,6 +63,13 @@ const AdminProductMap = () => {
     isLoading: childrenLoading,
     error: childrenError,
   } = useNodesByParent(centerId);
+  const childIds = useMemo(() => childNodes.map((c) => c.id), [childNodes]);
+  const { data: grandchildren = [], isLoading: grandchildrenLoading } =
+    useNodesByParents(childIds);
+  const childrenColorsByChildId = useMemo(
+    () => buildChildrenColorsMap(childIds, grandchildren),
+    [childIds, grandchildren],
+  );
   const { data: path = [] } = useNodePath(centerId);
   const { data: deleteChildNodes = [] } = useNodesByParent(deleteTarget?.id ?? null);
   const {
@@ -221,7 +230,7 @@ const AdminProductMap = () => {
   };
 
   const isPageLoading = adminLoading || rootLoading || !centerNode;
-  const isGraphLoading = centerLoading || childrenLoading;
+  const isGraphLoading = centerLoading || childrenLoading || grandchildrenLoading;
 
   const progressBarValue = globalProgress ?? 0;
   const progressLabel =
@@ -366,6 +375,7 @@ const AdminProductMap = () => {
                 <ProductMapCanvas
                   centerNode={centerNode}
                   childNodes={childNodes}
+                  childrenColorsByChildId={childrenColorsByChildId}
                   isLoading={isGraphLoading}
                   onSelectChild={(node) => setFocusId(node.id)}
                   onSelectCenter={goBack}
