@@ -21,7 +21,7 @@ import {
 } from "@/hooks/useProductMap";
 import { useAllProductMapNodes } from "@/hooks/useAllProductMapNodes";
 import { useNodesByParents } from "@/hooks/useNodesByParents";
-import { buildChildrenColorsMap } from "@/lib/product-map-status";
+import { buildChildrenBucketsMap } from "@/lib/product-map-status";
 import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
 import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
@@ -66,8 +66,8 @@ const AdminProductMap = () => {
   const childIds = useMemo(() => childNodes.map((c) => c.id), [childNodes]);
   const { data: grandchildren = [], isLoading: grandchildrenLoading } =
     useNodesByParents(childIds);
-  const childrenColorsByChildId = useMemo(
-    () => buildChildrenColorsMap(childIds, grandchildren),
+  const childrenBucketsByChildId = useMemo(
+    () => buildChildrenBucketsMap(childIds, grandchildren),
     [childIds, grandchildren],
   );
   const { data: path = [] } = useNodePath(centerId);
@@ -375,7 +375,7 @@ const AdminProductMap = () => {
                 <ProductMapCanvas
                   centerNode={centerNode}
                   childNodes={childNodes}
-                  childrenColorsByChildId={childrenColorsByChildId}
+                  childrenBucketsByChildId={childrenBucketsByChildId}
                   isLoading={isGraphLoading}
                   onSelectChild={(node) => setFocusId(node.id)}
                   onSelectCenter={goBack}

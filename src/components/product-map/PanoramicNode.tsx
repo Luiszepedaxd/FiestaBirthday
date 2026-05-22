@@ -11,9 +11,11 @@ import {
   getNodeTooltipText,
   getStatusColor,
   getStatusLabel,
+  hasBucketCounts,
   isVisuallyUntracked,
+  type BucketCounts,
 } from "@/lib/product-map-status";
-import { NodePips } from "./ProductMapNode";
+import { NodeBucketPips } from "./ProductMapNode";
 import type { ProductMapStatus } from "@/types/product-map";
 
 export const PANORAMIC_NODE_WIDTH = 140;
@@ -26,7 +28,7 @@ export type PanoramicNodeData = {
   status: ProductMapStatus;
   calculatedProgress: number | null;
   childrenCount: number;
-  childrenColors: string[];
+  childrenBuckets: BucketCounts;
 };
 
 export function formatPanoramicLabel(
@@ -39,8 +41,10 @@ export function formatPanoramicLabel(
   return `${name} · ${calculatedProgress}%`;
 }
 
-export function getPanoramicNodeHeight(childrenColors: string[]): number {
-  return childrenColors.length > 0 ? PANORAMIC_NODE_HEIGHT_WITH_PIPS : PANORAMIC_NODE_HEIGHT;
+export function getPanoramicNodeHeight(childrenBuckets: BucketCounts): number {
+  return hasBucketCounts(childrenBuckets)
+    ? PANORAMIC_NODE_HEIGHT_WITH_PIPS
+    : PANORAMIC_NODE_HEIGHT;
 }
 
 function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: PanoramicNodeData }>) {
@@ -52,7 +56,7 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
       ? getColorByProgress(data.calculatedProgress)
       : getStatusColor(data.status);
   const bgColor = borderColor;
-  const height = getPanoramicNodeHeight(data.childrenColors);
+  const height = getPanoramicNodeHeight(data.childrenBuckets);
 
   const tooltipLines = [
     data.fullName,
@@ -82,7 +86,10 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
             <span className="line-clamp-2 w-full text-center text-[11px] font-semibold leading-tight text-[#2E2D2C]">
               {data.label}
             </span>
-            <NodePips colors={data.childrenColors} className="mt-0 max-w-full" />
+            <NodeBucketPips
+              counts={data.childrenBuckets}
+              className="mt-0 gap-1 text-[9px] font-semibold text-[#2E2D2C]"
+            />
             <Handle
               type="source"
               position={Position.Bottom}

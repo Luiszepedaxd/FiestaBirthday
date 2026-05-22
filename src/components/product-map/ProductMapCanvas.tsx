@@ -15,6 +15,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
+import type { BucketCounts } from "@/lib/product-map-status";
 import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 import { ProductMapNodeBubble } from "./ProductMapNode";
 import { PRODUCT_MAP_BG } from "./constants";
@@ -31,7 +32,7 @@ type FlowNodeData = {
   isCenter: boolean;
   animationDelay: number;
   childrenCount: number;
-  childrenColors?: string[];
+  childrenBuckets?: BucketCounts;
 };
 
 type ProductMapFlowNodeType = Node<FlowNodeData, "productMapBubble">;
@@ -60,7 +61,7 @@ function ProductMapFlowNode({ data }: NodeProps<ProductMapFlowNodeType>) {
         calculatedProgress={data.calculatedProgress}
         isCenter={data.isCenter}
         childrenCount={data.childrenCount}
-        childrenColors={data.childrenColors}
+        childrenBuckets={data.childrenBuckets}
         size={data.isCenter ? "lg" : "md"}
         animationDelay={data.animationDelay ?? 0}
         variant="flow"
@@ -88,7 +89,7 @@ function getRadialRadius(childCount: number, isMobile: boolean): number {
 function buildGraph(
   centerNode: ProductMapNodeWithProgress,
   childNodes: ProductMapNodeWithProgress[],
-  childrenColorsByChildId: Record<string, string[]>,
+  childrenBucketsByChildId: Record<string, BucketCounts>,
   radius: number,
 ): { nodes: ProductMapFlowNodeType[]; edges: Edge[] } {
   const centerOffset = NODE_DIMENSIONS.center / 2;
@@ -131,7 +132,7 @@ function buildGraph(
         isCenter: false,
         animationDelay: 0.05 + index * 0.04,
         childrenCount: child.children_count,
-        childrenColors: childrenColorsByChildId[child.id] ?? [],
+        childrenBuckets: childrenBucketsByChildId[child.id],
       },
       draggable: false,
       selectable: true,
@@ -152,7 +153,7 @@ function buildGraph(
 type FlowCanvasInnerProps = {
   centerNode: ProductMapNodeWithProgress;
   childNodes: ProductMapNodeWithProgress[];
-  childrenColorsByChildId: Record<string, string[]>;
+  childrenBucketsByChildId: Record<string, BucketCounts>;
   isLoading: boolean;
   onSelectChild: (node: ProductMapNodeWithProgress) => void;
   onSelectCenter: () => void;
@@ -164,7 +165,7 @@ type FlowCanvasInnerProps = {
 function FlowCanvasInner({
   centerNode,
   childNodes,
-  childrenColorsByChildId,
+  childrenBucketsByChildId,
   isLoading,
   onSelectChild,
   onSelectCenter,
@@ -177,8 +178,8 @@ function FlowCanvasInner({
   const radius = getRadialRadius(childNodes.length, isMobile);
 
   const graph = useMemo(
-    () => buildGraph(centerNode, childNodes, childrenColorsByChildId, radius),
-    [centerNode, childNodes, childrenColorsByChildId, radius],
+    () => buildGraph(centerNode, childNodes, childrenBucketsByChildId, radius),
+    [centerNode, childNodes, childrenBucketsByChildId, radius],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<ProductMapFlowNodeType>([]);

@@ -26,7 +26,7 @@ import {
   PANORAMIC_NODE_WIDTH,
   type PanoramicNodeData,
 } from "./PanoramicNode";
-import { getNodeVisualColor, getStatusColor } from "@/lib/product-map-status";
+import { buildBucketCountsForChildren, getStatusColor } from "@/lib/product-map-status";
 
 const CANVAS_MIN_HEIGHT_PX = 560;
 
@@ -47,7 +47,7 @@ function applyDagreLayout(
   nodes.forEach((node) => {
     g.setNode(node.id, {
       width: PANORAMIC_NODE_WIDTH,
-      height: getPanoramicNodeHeight(node.data.childrenColors),
+      height: getPanoramicNodeHeight(node.data.childrenBuckets),
     });
   });
 
@@ -59,7 +59,7 @@ function applyDagreLayout(
 
   const layoutedNodes = nodes.map((node) => {
     const pos = g.node(node.id);
-    const nodeHeight = getPanoramicNodeHeight(node.data.childrenColors);
+    const nodeHeight = getPanoramicNodeHeight(node.data.childrenBuckets);
     return {
       ...node,
       position: {
@@ -90,7 +90,7 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
     const directChildren = (childrenByParent.get(n.id) ?? []).sort(
       (a, b) => a.position - b.position,
     );
-    const childrenColors = directChildren.map(getNodeVisualColor);
+    const childrenBuckets = buildBucketCountsForChildren(directChildren);
 
     return {
     id: n.id,
@@ -102,7 +102,7 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
       status: n.status,
       calculatedProgress: n.calculated_progress,
       childrenCount: n.children_count,
-      childrenColors,
+      childrenBuckets,
     },
     draggable: false,
     selectable: true,

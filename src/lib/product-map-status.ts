@@ -103,11 +103,52 @@ export function getNodeVisualColor(
   return getStatusColor(node.status);
 }
 
-/** Map each parent id to visual colors of its direct children (for orbit pips). */
-export function buildChildrenColorsMap(
+export type ChildBucket = "done" | "in_progress" | "pending";
+
+export type BucketCounts = {
+  done: number;
+  in_progress: number;
+  pending: number;
+};
+
+export const EMPTY_BUCKET_COUNTS: BucketCounts = {
+  done: 0,
+  in_progress: 0,
+  pending: 0,
+};
+
+export function getChildBucket(
+  child: Pick<ProductMapNodeWithProgress, "status" | "calculated_progress" | "children_count">,
+): ChildBucket {
+  if (child.children_count > 0) {
+    if (child.calculated_progress === 100) return "done";
+    if (child.calculated_progress === null || child.calculated_progress === 0) return "pending";
+    return "in_progress";
+  }
+  if (child.status === "completed") return "done";
+  if (child.status === "not_started" || child.status === "untracked") return "pending";
+  return "in_progress";
+}
+
+export function hasBucketCounts(counts: BucketCounts): boolean {
+  return counts.done + counts.in_progress + counts.pending > 0;
+}
+
+export function buildBucketCountsForChildren(
+  children: ProductMapNodeWithProgress[],
+): BucketCounts {
+  const counts: BucketCounts = { ...EMPTY_BUCKET_COUNTS };
+  for (const child of children) {
+    counts[getChildBucket(child)]++;
+  }
+  return counts;
+}
+
+/** Map each parent id to bucket counts of its direct children (for orbit pips). */
+export function buildChildrenBucketsMap(
   parentIds: string[],
   childNodes: ProductMapNodeWithProgress[],
-): Record<string, string[]> {
+): Record<string, BucketCounts> {
   const grouped: Record<string, ProductMapNodeWithProgress[]> = {};
   for (const id of parentIds) grouped[id] = [];
 
@@ -118,11 +159,9 @@ export function buildChildrenColorsMap(
     }
   }
 
-  const result: Record<string, string[]> = {};
+  const result: Record<string, BucketCounts> = {};
   for (const id of parentIds) {
-    result[id] = (grouped[id] ?? [])
-      .sort((a, b) => a.position - b.position)
-      .map(getNodeVisualColor);
+    result[id] = buildBucketCountsForChildren(grouped[id] ?? []);
   }
   return result;
 }
