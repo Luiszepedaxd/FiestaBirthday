@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, CircleDot, GitBranch, Plus, RotateCcw } from "lucide-react";
+import { ArrowLeft, CircleDot, GitBranch, Home, Plus } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useIsAdmin } from "@/lib/auth";
 import {
   useCreateNode,
@@ -183,11 +189,12 @@ const AdminProductMap = () => {
         });
         toast.success("Nodo creado");
       } else if (editMode === "edit") {
+        const isLeaf = (editTarget.children_count ?? 0) === 0;
         await updateNode.mutateAsync({
           id: editTarget.id,
           parent_id: editTarget.parent_id,
           name: values.name,
-          status: values.status,
+          ...(isLeaf ? { status: values.status } : {}),
         });
         toast.success("Nodo actualizado");
       }
@@ -268,10 +275,10 @@ const AdminProductMap = () => {
                 <ToggleGroupItem
                   value="mindly"
                   className="rounded-lg px-3 data-[state=on]:bg-[#FFF0F9] data-[state=on]:text-[#C6017F]"
-                  aria-label="Vista Mindly"
+                  aria-label="Vista Foco"
                 >
                   <CircleDot className="mr-1.5 h-4 w-4" />
-                  Mindly
+                  Foco
                 </ToggleGroupItem>
                 <ToggleGroupItem
                   value="panoramic"
@@ -294,17 +301,29 @@ const AdminProductMap = () => {
             </div>
             {viewMode === "mindly" && (
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
-                  onClick={resetToRoot}
-                  disabled={!root || centerId === root.id}
-                >
-                  <RotateCcw className="mr-1.5 h-4 w-4" />
-                  Reset
-                </Button>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
+                        onClick={resetToRoot}
+                        disabled={!root || centerId === root.id}
+                      >
+                        <Home className="mr-1.5 h-4 w-4" />
+                        Inicio
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      className="rounded-lg border-[#E5E5E5] bg-white text-[#2E2D2C]"
+                    >
+                      Volver al nodo raíz
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <Button
                   type="button"
                   size="sm"

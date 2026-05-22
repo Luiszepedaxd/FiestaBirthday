@@ -211,8 +211,11 @@ export function useUpdateNode() {
         payload.name = input.name;
       }
       if (input.status !== undefined) {
-        payload.status = input.status;
-        payload.color = getStatusColor(input.status);
+        const node = await fetchNodeById(input.id);
+        if ((node.children_count ?? 0) === 0) {
+          payload.status = input.status;
+          payload.color = getStatusColor(input.status);
+        }
       }
 
       const { error } = await supabase

@@ -73,7 +73,7 @@ export function NodeEditDialog({
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    onSubmit({ name: trimmed, status });
+    onSubmit({ name: trimmed, status: hasChildren ? initialStatus : status });
   };
 
   return (
@@ -102,9 +102,21 @@ export function NodeEditDialog({
 
           {showStatusField && (
             <div className="space-y-2">
+              {hasChildren && (
+                <p className="rounded-lg bg-[#FAF8F5] px-3 py-2 text-xs text-[#717B99]">
+                  El estado de este nodo se calcula automáticamente desde sus hijos. Solo puedes
+                  editar el nombre.
+                </p>
+              )}
               <Label className="text-[#2E2D2C]">Estado</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as ProductMapStatus)}>
-                <SelectTrigger className="rounded-xl border-[#E5E5E5] focus:ring-[#C6017F]">
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as ProductMapStatus)}
+                disabled={hasChildren}
+              >
+                <SelectTrigger
+                  className="rounded-xl border-[#E5E5E5] focus:ring-[#C6017F] disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -129,12 +141,6 @@ export function NodeEditDialog({
               )}
               {status === "untracked" && !hasChildren && (
                 <p className="text-xs text-[#717B99]">No participa en el cálculo del progreso del padre.</p>
-              )}
-              {hasChildren && (
-                <p className="text-xs text-[#717B99]">
-                  El progreso de este nodo se calcula automáticamente desde sus hijos. Cambiar el
-                  estado aquí solo afecta cómo se cuenta en el cálculo del padre.
-                </p>
               )}
             </div>
           )}
