@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
+  getColorByProgress,
   getNodeTooltipText,
   getStatusColor,
   isVisuallyUntracked,
@@ -164,8 +165,12 @@ function BubbleContent({
   childrenCount?: number;
   leafStats?: LeafStatsCounts;
 }) {
-  const effectiveStatus: ProductMapStatus = dimmed ? "untracked" : status;
-  const displayColor = getStatusColor(effectiveStatus);
+  const isParent = (childrenCount ?? 0) > 0;
+  const displayColor = dimmed
+    ? getStatusColor("untracked")
+    : isParent
+      ? getColorByProgress(calculatedProgress)
+      : getStatusColor(status);
   const showProgressLabel =
     isCenter && calculatedProgress !== null && !dimmed;
   const showLeafStats =
@@ -217,8 +222,12 @@ export function ProductMapNodeBubble({
 }: ProductMapNodeBubbleProps) {
   const dimmed = isVisuallyUntracked(calculatedProgress) || status === "untracked";
   const px = sizePx[size];
-  const effectiveStatus: ProductMapStatus = dimmed ? "untracked" : status;
-  const ringColor = getStatusColor(effectiveStatus);
+  const isParent = (childrenCount ?? 0) > 0;
+  const ringColor = dimmed
+    ? getStatusColor("untracked")
+    : isParent
+      ? getColorByProgress(calculatedProgress)
+      : getStatusColor(status);
   const showRing = calculatedProgress !== null && !dimmed;
   const tooltip = getNodeTooltipText(status, calculatedProgress);
 

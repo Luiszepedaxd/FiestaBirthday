@@ -7,6 +7,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  getColorByProgress,
   getNodeTooltipText,
   getStatusColor,
   getStatusLabel,
@@ -23,6 +24,7 @@ export type PanoramicNodeData = {
   fullName: string;
   status: ProductMapStatus;
   calculatedProgress: number | null;
+  childrenCount: number;
 };
 
 export function formatPanoramicLabel(
@@ -46,9 +48,13 @@ export function formatPanoramicLabel(
 
 function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: PanoramicNodeData }>) {
   const dimmed = isVisuallyUntracked(data.calculatedProgress) || data.status === "untracked";
-  const effectiveStatus: ProductMapStatus = dimmed ? "untracked" : data.status;
-  const borderColor = getStatusColor(effectiveStatus);
-  const bgColor = getStatusColor(effectiveStatus);
+  const isParent = data.childrenCount > 0;
+  const borderColor = dimmed
+    ? getStatusColor("untracked")
+    : isParent
+      ? getColorByProgress(data.calculatedProgress)
+      : getStatusColor(data.status);
+  const bgColor = borderColor;
 
   const tooltipLines = [
     data.fullName,

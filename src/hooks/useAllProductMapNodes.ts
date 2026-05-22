@@ -5,8 +5,7 @@ import type { ProductMapNodeWithProgress } from "@/types/product-map";
 
 const NODE_VIEW = "product_map_nodes_with_progress";
 
-const NODE_VIEW_COLUMNS =
-  "id, name, parent_id, color, position, description, status, created_at, updated_at, created_by, calculated_progress, children_count, untracked_children_count";
+const NODE_VIEW_COLUMNS = "*";
 
 export const allProductMapNodesKey = [...productMapKeys.all, "all-nodes"] as const;
 

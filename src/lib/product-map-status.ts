@@ -82,3 +82,13 @@ export function getNodeTooltipText(
 export function isVisuallyUntracked(calculatedProgress: number | null): boolean {
   return calculatedProgress === null;
 }
+
+export function getColorByProgress(progress: number | null): string {
+  if (progress === null || progress === undefined) return "#9CA3AF";
+  if (progress === 0) return "#EF4444";
+  if (progress <= 25) return "#A855F7";
+  if (progress <= 50) return "#F59E0B";
+  if (progress <= 75) return "#F97316";
+  if (progress <= 99) return "#3B82F6";
+  return "#22C55E";
+}
