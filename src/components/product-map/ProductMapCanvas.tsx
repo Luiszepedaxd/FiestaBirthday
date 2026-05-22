@@ -30,6 +30,12 @@ type FlowNodeData = {
   calculatedProgress: number | null;
   isCenter: boolean;
   animationDelay: number;
+  childrenCount: number;
+  leafStats?: {
+    completed: number;
+    inProgress: number;
+    notStarted: number;
+  };
 };
 
 type ProductMapFlowNodeType = Node<FlowNodeData, "productMapBubble">;
@@ -57,6 +63,8 @@ function ProductMapFlowNode({ data }: NodeProps<ProductMapFlowNodeType>) {
         status={data.status}
         calculatedProgress={data.calculatedProgress}
         isCenter={data.isCenter}
+        childrenCount={data.childrenCount}
+        leafStats={data.leafStats}
         size={data.isCenter ? "lg" : "md"}
         animationDelay={data.animationDelay ?? 0}
         variant="flow"
@@ -100,6 +108,12 @@ function buildGraph(
         calculatedProgress: centerNode.calculated_progress,
         isCenter: true,
         animationDelay: 0,
+        childrenCount: centerNode.children_count,
+        leafStats: {
+          completed: centerNode.leaf_completed_count,
+          inProgress: centerNode.leaf_in_progress_count,
+          notStarted: centerNode.leaf_not_started_count,
+        },
       },
       draggable: false,
       selectable: true,
@@ -124,6 +138,7 @@ function buildGraph(
         calculatedProgress: child.calculated_progress,
         isCenter: false,
         animationDelay: 0.05 + index * 0.04,
+        childrenCount: child.children_count,
       },
       draggable: false,
       selectable: true,

@@ -79,7 +79,17 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
     type: "panoramic",
     position: { x: 0, y: 0 },
     data: {
-      label: formatPanoramicLabel(n.name, n.status, n.calculated_progress),
+      label: formatPanoramicLabel(
+        n.name,
+        n.status,
+        n.calculated_progress,
+        n.children_count,
+        {
+          completed: n.leaf_completed_count,
+          inProgress: n.leaf_in_progress_count,
+          notStarted: n.leaf_not_started_count,
+        },
+      ),
       fullName: n.name,
       status: n.status,
       calculatedProgress: n.calculated_progress,

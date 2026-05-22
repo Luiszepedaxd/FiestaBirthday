@@ -12,7 +12,8 @@ import {
   getStatusLabel,
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
-import type { ProductMapStatus } from "@/types/product-map";
+import { formatLeafStatsCompact } from "./ProductMapNode";
+import type { LeafStatsCounts, ProductMapStatus } from "@/types/product-map";
 
 export const PANORAMIC_NODE_WIDTH = 140;
 export const PANORAMIC_NODE_HEIGHT = 40;
@@ -28,10 +29,19 @@ export function formatPanoramicLabel(
   name: string,
   status: ProductMapStatus,
   calculatedProgress: number | null,
+  childrenCount: number,
+  leafStats?: LeafStatsCounts,
 ): string {
   const untracked = isVisuallyUntracked(calculatedProgress) || status === "untracked";
-  if (untracked) return name;
-  return `${name} · ${calculatedProgress}%`;
+  const statsSuffix =
+    childrenCount > 0 && leafStats ? formatLeafStatsCompact(leafStats) : "";
+
+  if (untracked) {
+    return statsSuffix ? `${name}${statsSuffix}` : name;
+  }
+
+  const base = `${name} · ${calculatedProgress}%`;
+  return statsSuffix ? `${base}${statsSuffix}` : base;
 }
 
 function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: PanoramicNodeData }>) {

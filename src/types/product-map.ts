@@ -24,7 +24,16 @@ export interface ProductMapNodeWithProgress extends ProductMapNode {
   calculated_progress: number | null;
   children_count: number;
   untracked_children_count: number;
+  leaf_completed_count: number;
+  leaf_in_progress_count: number;
+  leaf_not_started_count: number;
 }
+
+export type LeafStatsCounts = {
+  completed: number;
+  inProgress: number;
+  notStarted: number;
+};
 
 export type CreateProductMapNodeInput = {
   name: string;
