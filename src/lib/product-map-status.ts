@@ -1,4 +1,4 @@
-import type { ProductMapStatus } from "@/types/product-map";
+import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 
 export type StatusConfigEntry = {
   label: string;
@@ -91,4 +91,14 @@ export function getColorByProgress(progress: number | null): string {
   if (progress <= 75) return "#F97316";
   if (progress <= 99) return "#3B82F6";
   return "#22C55E";
+}
+
+/** Bubble/pip color for a node (parent uses progress, leaf uses status). */
+export function getNodeVisualColor(
+  node: Pick<ProductMapNodeWithProgress, "children_count" | "calculated_progress" | "status">,
+): string {
+  const dimmed = isVisuallyUntracked(node.calculated_progress) || node.status === "untracked";
+  if (dimmed) return getStatusColor("untracked");
+  if (node.children_count > 0) return getColorByProgress(node.calculated_progress);
+  return getStatusColor(node.status);
 }

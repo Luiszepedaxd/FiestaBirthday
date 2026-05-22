@@ -22,11 +22,11 @@ import { PRODUCT_MAP_BG } from "./constants";
 import {
   PanoramicNode,
   formatPanoramicLabel,
-  PANORAMIC_NODE_HEIGHT,
+  getPanoramicNodeHeight,
   PANORAMIC_NODE_WIDTH,
   type PanoramicNodeData,
 } from "./PanoramicNode";
-import { getStatusColor } from "@/lib/product-map-status";
+import { getNodeVisualColor, getStatusColor } from "@/lib/product-map-status";
 
 const CANVAS_MIN_HEIGHT_PX = 560;
 
@@ -45,7 +45,10 @@ function applyDagreLayout(
   g.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 50 });
 
   nodes.forEach((node) => {
-    g.setNode(node.id, { width: PANORAMIC_NODE_WIDTH, height: PANORAMIC_NODE_HEIGHT });
+    g.setNode(node.id, {
+      width: PANORAMIC_NODE_WIDTH,
+      height: getPanoramicNodeHeight(node.data.childrenColors),
+    });
   });
 
   edges.forEach((edge) => {
@@ -56,11 +59,12 @@ function applyDagreLayout(
 
   const layoutedNodes = nodes.map((node) => {
     const pos = g.node(node.id);
+    const nodeHeight = getPanoramicNodeHeight(node.data.childrenColors);
     return {
       ...node,
       position: {
         x: pos.x - PANORAMIC_NODE_WIDTH / 2,
-        y: pos.y - PANORAMIC_NODE_HEIGHT / 2,
+        y: pos.y - nodeHeight / 2,
       },
       targetPosition: Position.Top,
       sourcePosition: Position.Bottom,
@@ -74,31 +78,37 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
   nodes: PanoramicFlowNode[];
   edges: Edge[];
 } {
-  const nodes: PanoramicFlowNode[] = allNodes.map((n) => ({
+  const childrenByParent = new Map<string, ProductMapNodeWithProgress[]>();
+  for (const node of allNodes) {
+    if (node.parent_id === null) continue;
+    const siblings = childrenByParent.get(node.parent_id) ?? [];
+    siblings.push(node);
+    childrenByParent.set(node.parent_id, siblings);
+  }
+
+  const nodes: PanoramicFlowNode[] = allNodes.map((n) => {
+    const directChildren = (childrenByParent.get(n.id) ?? []).sort(
+      (a, b) => a.position - b.position,
+    );
+    const childrenColors = directChildren.map(getNodeVisualColor);
+
+    return {
     id: n.id,
     type: "panoramic",
     position: { x: 0, y: 0 },
     data: {
-      label: formatPanoramicLabel(
-        n.name,
-        n.status,
-        n.calculated_progress,
-        n.children_count,
-        {
-          completed: n.leaf_completed_count,
-          inProgress: n.leaf_in_progress_count,
-          notStarted: n.leaf_not_started_count,
-        },
-      ),
+      label: formatPanoramicLabel(n.name, n.status, n.calculated_progress),
       fullName: n.name,
       status: n.status,
       calculatedProgress: n.calculated_progress,
       childrenCount: n.children_count,
+      childrenColors,
     },
     draggable: false,
     selectable: true,
     connectable: false,
-  }));
+  };
+  });
 
   const edges: Edge[] = allNodes
     .filter((n) => n.parent_id !== null)

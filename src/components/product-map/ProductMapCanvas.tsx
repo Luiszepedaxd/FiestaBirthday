@@ -15,6 +15,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
+import { getNodeVisualColor } from "@/lib/product-map-status";
 import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 import { ProductMapNodeBubble } from "./ProductMapNode";
 import { PRODUCT_MAP_BG } from "./constants";
@@ -31,11 +32,7 @@ type FlowNodeData = {
   isCenter: boolean;
   animationDelay: number;
   childrenCount: number;
-  leafStats?: {
-    completed: number;
-    inProgress: number;
-    notStarted: number;
-  };
+  childrenColors?: string[];
 };
 
 type ProductMapFlowNodeType = Node<FlowNodeData, "productMapBubble">;
@@ -64,7 +61,7 @@ function ProductMapFlowNode({ data }: NodeProps<ProductMapFlowNodeType>) {
         calculatedProgress={data.calculatedProgress}
         isCenter={data.isCenter}
         childrenCount={data.childrenCount}
-        leafStats={data.leafStats}
+        childrenColors={data.childrenColors}
         size={data.isCenter ? "lg" : "md"}
         animationDelay={data.animationDelay ?? 0}
         variant="flow"
@@ -109,11 +106,7 @@ function buildGraph(
         isCenter: true,
         animationDelay: 0,
         childrenCount: centerNode.children_count,
-        leafStats: {
-          completed: centerNode.leaf_completed_count,
-          inProgress: centerNode.leaf_in_progress_count,
-          notStarted: centerNode.leaf_not_started_count,
-        },
+        childrenColors: childNodes.map(getNodeVisualColor),
       },
       draggable: false,
       selectable: true,

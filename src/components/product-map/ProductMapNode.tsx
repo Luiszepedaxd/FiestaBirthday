@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { Check, Circle, Loader } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -13,58 +12,30 @@ import {
   getStatusColor,
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
-import type { LeafStatsCounts, ProductMapStatus } from "@/types/product-map";
+import type { ProductMapStatus } from "@/types/product-map";
 
-const LEAF_STAT_COLORS = {
-  completed: "#22C55E",
-  inProgress: "#F97316",
-  notStarted: "#EF4444",
-} as const;
-
-export function getLeafStatsTotal(stats: LeafStatsCounts): number {
-  return stats.completed + stats.inProgress + stats.notStarted;
-}
-
-export function formatLeafStatsCompact(stats: LeafStatsCounts): string {
-  const parts: string[] = [];
-  if (stats.completed > 0) parts.push(`✓${stats.completed}`);
-  if (stats.inProgress > 0) parts.push(`●${stats.inProgress}`);
-  if (stats.notStarted > 0) parts.push(`○${stats.notStarted}`);
-  return parts.length > 0 ? ` ${parts.join(" ")}` : "";
-}
-
-type NodeStatsProps = {
-  stats: LeafStatsCounts;
+type NodePipsProps = {
+  colors: string[];
   className?: string;
 };
 
-export function NodeStats({ stats, className }: NodeStatsProps) {
-  if (getLeafStatsTotal(stats) === 0) return null;
-
-  const items: { key: string; Icon: typeof Check; color: string; count: number }[] = [];
-  if (stats.completed > 0) {
-    items.push({ key: "completed", Icon: Check, color: LEAF_STAT_COLORS.completed, count: stats.completed });
-  }
-  if (stats.inProgress > 0) {
-    items.push({ key: "inProgress", Icon: Loader, color: LEAF_STAT_COLORS.inProgress, count: stats.inProgress });
-  }
-  if (stats.notStarted > 0) {
-    items.push({ key: "notStarted", Icon: Circle, color: LEAF_STAT_COLORS.notStarted, count: stats.notStarted });
-  }
+export function NodePips({ colors, className }: NodePipsProps) {
+  if (colors.length === 0) return null;
 
   return (
     <div
       className={cn(
-        "mt-0.5 flex flex-wrap items-center justify-center gap-0.5 text-[10px] font-medium tabular-nums leading-none",
+        "mt-1 flex max-w-[80%] flex-wrap items-center justify-center gap-1",
         className,
       )}
     >
-      {items.map((item, index) => (
-        <span key={item.key} className="inline-flex items-center gap-0.5">
-          {index > 0 && <span className="text-white/70">·</span>}
-          <item.Icon className="h-2.5 w-2.5 shrink-0" style={{ color: item.color }} strokeWidth={2.5} />
-          <span>{item.count}</span>
-        </span>
+      {colors.map((color, i) => (
+        <span
+          key={i}
+          className="block h-1.5 w-1.5 rounded-full border border-white/40"
+          style={{ backgroundColor: color }}
+          aria-hidden
+        />
       ))}
     </div>
   );
@@ -76,7 +47,7 @@ type ProductMapNodeBubbleProps = {
   calculatedProgress: number | null;
   isCenter?: boolean;
   childrenCount?: number;
-  leafStats?: LeafStatsCounts;
+  childrenColors?: string[];
   size?: "sm" | "md" | "lg";
   className?: string;
   onClick?: () => void;
@@ -153,7 +124,7 @@ function BubbleContent({
   className,
   dimmed,
   childrenCount,
-  leafStats,
+  childrenColors,
 }: {
   name: string;
   status: ProductMapStatus;
@@ -163,7 +134,7 @@ function BubbleContent({
   className?: string;
   dimmed: boolean;
   childrenCount?: number;
-  leafStats?: LeafStatsCounts;
+  childrenColors?: string[];
 }) {
   const isParent = (childrenCount ?? 0) > 0;
   const displayColor = dimmed
@@ -173,11 +144,8 @@ function BubbleContent({
       : getStatusColor(status);
   const showProgressLabel =
     isCenter && calculatedProgress !== null && !dimmed;
-  const showLeafStats =
-    isCenter &&
-    (childrenCount ?? 0) > 0 &&
-    leafStats !== undefined &&
-    getLeafStatsTotal(leafStats) > 0;
+  const showPips =
+    isCenter && (childrenColors?.length ?? 0) > 0;
 
   return (
     <div
@@ -201,7 +169,7 @@ function BubbleContent({
           {calculatedProgress}%
         </span>
       )}
-      {showLeafStats && <NodeStats stats={leafStats} />}
+      {showPips && <NodePips colors={childrenColors!} />}
     </div>
   );
 }
@@ -212,7 +180,7 @@ export function ProductMapNodeBubble({
   calculatedProgress,
   isCenter = false,
   childrenCount,
-  leafStats,
+  childrenColors,
   size = "md",
   className,
   onClick,
@@ -245,7 +213,7 @@ export function ProductMapNodeBubble({
         className={className}
         dimmed={dimmed}
         childrenCount={childrenCount}
-        leafStats={leafStats}
+        childrenColors={childrenColors}
       />
     </div>
   );

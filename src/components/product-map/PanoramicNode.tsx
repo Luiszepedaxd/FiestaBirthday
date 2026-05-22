@@ -13,11 +13,12 @@ import {
   getStatusLabel,
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
-import { formatLeafStatsCompact } from "./ProductMapNode";
-import type { LeafStatsCounts, ProductMapStatus } from "@/types/product-map";
+import { NodePips } from "./ProductMapNode";
+import type { ProductMapStatus } from "@/types/product-map";
 
 export const PANORAMIC_NODE_WIDTH = 140;
 export const PANORAMIC_NODE_HEIGHT = 40;
+export const PANORAMIC_NODE_HEIGHT_WITH_PIPS = 56;
 
 export type PanoramicNodeData = {
   label: string;
@@ -25,25 +26,21 @@ export type PanoramicNodeData = {
   status: ProductMapStatus;
   calculatedProgress: number | null;
   childrenCount: number;
+  childrenColors: string[];
 };
 
 export function formatPanoramicLabel(
   name: string,
   status: ProductMapStatus,
   calculatedProgress: number | null,
-  childrenCount: number,
-  leafStats?: LeafStatsCounts,
 ): string {
   const untracked = isVisuallyUntracked(calculatedProgress) || status === "untracked";
-  const statsSuffix =
-    childrenCount > 0 && leafStats ? formatLeafStatsCompact(leafStats) : "";
+  if (untracked) return name;
+  return `${name} · ${calculatedProgress}%`;
+}
 
-  if (untracked) {
-    return statsSuffix ? `${name}${statsSuffix}` : name;
-  }
-
-  const base = `${name} · ${calculatedProgress}%`;
-  return statsSuffix ? `${base}${statsSuffix}` : base;
+export function getPanoramicNodeHeight(childrenColors: string[]): number {
+  return childrenColors.length > 0 ? PANORAMIC_NODE_HEIGHT_WITH_PIPS : PANORAMIC_NODE_HEIGHT;
 }
 
 function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: PanoramicNodeData }>) {
@@ -55,6 +52,7 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
       ? getColorByProgress(data.calculatedProgress)
       : getStatusColor(data.status);
   const bgColor = borderColor;
+  const height = getPanoramicNodeHeight(data.childrenColors);
 
   const tooltipLines = [
     data.fullName,
@@ -68,10 +66,10 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className="nodrag nopan flex cursor-pointer items-center justify-center rounded-md border px-2 shadow-sm transition-shadow hover:shadow-md"
+            className="nodrag nopan flex cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-1 shadow-sm transition-shadow hover:shadow-md"
             style={{
               width: PANORAMIC_NODE_WIDTH,
-              height: PANORAMIC_NODE_HEIGHT,
+              height,
               borderColor,
               backgroundColor: `${bgColor}33`,
             }}
@@ -84,6 +82,7 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
             <span className="line-clamp-2 w-full text-center text-[11px] font-semibold leading-tight text-[#2E2D2C]">
               {data.label}
             </span>
+            <NodePips colors={data.childrenColors} className="mt-0 max-w-full" />
             <Handle
               type="source"
               position={Position.Bottom}
