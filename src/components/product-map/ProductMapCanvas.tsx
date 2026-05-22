@@ -3,6 +3,8 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
+  useNodesState,
+  useEdgesState,
   type Node,
   type Edge,
   type NodeProps,
@@ -20,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const CENTER_NODE_ID = "__center__";
+const CANVAS_HEIGHT_PX = 520;
 
 type FlowNodeData = {
   label: string;
@@ -28,19 +31,40 @@ type FlowNodeData = {
   animationDelay: number;
 };
 
-function ProductMapFlowNode({ data }: NodeProps<Node<FlowNodeData>>) {
+type ProductMapFlowNodeType = Node<FlowNodeData, "productMapBubble">;
+
+const NODE_DIMENSIONS = {
+  center: 144,
+  child: 96,
+} as const;
+
+function ProductMapFlowNode({ data }: NodeProps<ProductMapFlowNodeType>) {
+  const size = data.isCenter ? NODE_DIMENSIONS.center : NODE_DIMENSIONS.child;
+
   return (
-    <>
-      <Handle type="target" position={Position.Top} className="!opacity-0 !h-0 !w-0 !min-h-0 !min-w-0 !border-0" />
+    <div
+      className="nodrag nopan flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!pointer-events-none !opacity-0 !h-0 !w-0 !min-h-0 !min-w-0 !border-0"
+      />
       <ProductMapNodeBubble
         name={data.label}
         color={data.color}
         isCenter={data.isCenter}
         size={data.isCenter ? "lg" : "md"}
         animationDelay={data.animationDelay ?? 0}
+        variant="flow"
       />
-      <Handle type="source" position={Position.Bottom} className="!opacity-0 !h-0 !w-0 !min-h-0 !min-w-0 !border-0" />
-    </>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!pointer-events-none !opacity-0 !h-0 !w-0 !min-h-0 !min-w-0 !border-0"
+      />
+    </div>
   );
 }
 
@@ -49,22 +73,25 @@ const nodeTypes = {
 };
 
 function getRadialRadius(childCount: number, isMobile: boolean): number {
-  const base = isMobile ? 120 : 180;
+  const base = isMobile ? 130 : 200;
   if (childCount <= 6) return base;
-  if (childCount <= 12) return base + 40;
-  return base + 80;
+  if (childCount <= 12) return base + 50;
+  return base + 90;
 }
 
 function buildGraph(
   centerNode: ProductMapNode,
   childNodes: ProductMapNode[],
   radius: number,
-): { nodes: Node<FlowNodeData>[]; edges: Edge[] } {
-  const nodes: Node<FlowNodeData>[] = [
+): { nodes: ProductMapFlowNodeType[]; edges: Edge[] } {
+  const centerOffset = NODE_DIMENSIONS.center / 2;
+  const childOffset = NODE_DIMENSIONS.child / 2;
+
+  const nodes: ProductMapFlowNodeType[] = [
     {
       id: CENTER_NODE_ID,
       type: "productMapBubble",
-      position: { x: -72, y: -72 },
+      position: { x: -centerOffset, y: -centerOffset },
       data: {
         label: centerNode.name,
         color: centerNode.color,
@@ -72,6 +99,7 @@ function buildGraph(
         animationDelay: 0,
       },
       draggable: false,
+      selectable: true,
     },
   ];
 
@@ -86,7 +114,7 @@ function buildGraph(
     nodes.push({
       id: child.id,
       type: "productMapBubble",
-      position: { x: x - 40, y: y - 40 },
+      position: { x: x - childOffset, y: y - childOffset },
       data: {
         label: child.name,
         color: child.color,
@@ -94,6 +122,7 @@ function buildGraph(
         animationDelay: 0.05 + index * 0.04,
       },
       draggable: false,
+      selectable: true,
     });
 
     edges.push({
@@ -133,17 +162,28 @@ function FlowCanvasInner({
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
   const radius = getRadialRadius(childNodes.length, isMobile);
 
-  const { nodes, edges } = useMemo(
+  const graph = useMemo(
     () => buildGraph(centerNode, childNodes, radius),
     [centerNode, childNodes, radius],
   );
 
+  const [nodes, setNodes, onNodesChange] = useNodesState<ProductMapFlowNodeType>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
   useEffect(() => {
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
+  }, [graph, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (nodes.length === 0) return;
+
     const timer = window.setTimeout(() => {
-      void fitView({ padding: 0.35, duration: 300 });
-    }, 50);
+      void fitView({ padding: 0.35, duration: 280, minZoom: 0.5, maxZoom: 1.2 });
+    }, 120);
+
     return () => window.clearTimeout(timer);
-  }, [fitView, centerNode.id, childNodes.length]);
+  }, [fitView, nodes, edges, centerNode.id, childNodes.length]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
@@ -172,7 +212,10 @@ function FlowCanvasInner({
 
   if (isLoading) {
     return (
-      <div className="flex h-full min-h-[320px] items-center justify-center gap-4 p-8">
+      <div
+        className="flex items-center justify-center gap-4 p-8"
+        style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
+      >
         <Skeleton className="h-32 w-32 rounded-full" />
         <Skeleton className="h-20 w-20 rounded-full" />
         <Skeleton className="h-20 w-20 rounded-full" />
@@ -181,24 +224,28 @@ function FlowCanvasInner({
   }
 
   return (
-    <div className="relative h-full min-h-[min(70vh,520px)] w-full">
+    <div
+      className="relative w-full overflow-hidden rounded-2xl"
+      style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
         onNodeContextMenu={handleNodeContextMenu}
         nodesDraggable={false}
         nodesConnectable={false}
-        elementsSelectable={false}
+        elementsSelectable
         panOnDrag
         zoomOnScroll
         zoomOnPinch
-        minZoom={0.4}
+        minZoom={0.35}
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
-        className="rounded-2xl"
-        style={{ background: PRODUCT_MAP_BG }}
+        style={{ width: "100%", height: "100%", background: PRODUCT_MAP_BG }}
       >
         <Background color="#E5E5E5" gap={24} size={1} />
       </ReactFlow>
@@ -225,7 +272,7 @@ function FlowCanvasInner({
       )}
 
       {canGoBack && (
-        <p className="pointer-events-none absolute bottom-3 left-0 right-0 text-center text-xs text-[#717B99]">
+        <p className="pointer-events-none absolute bottom-3 left-0 right-0 z-10 text-center text-xs text-[#717B99]">
           Toca el centro para volver · Esc o ← para atrás
         </p>
       )}

@@ -241,7 +241,7 @@ const AdminProductMap = () => {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-2 py-4 sm:px-4">
+      <main className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-2 py-4 sm:px-4">
         {isPageLoading ? (
           <div className="flex flex-1 items-center justify-center p-12">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C6017F] border-t-transparent" />

@@ -11,6 +11,8 @@ type ProductMapNodeBubbleProps = {
   onClick?: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   animationDelay?: number;
+  /** Inside React Flow: no button/motion entrance (avoids 0-size / invisible nodes). */
+  variant?: "default" | "flow";
 };
 
 const sizeClasses = {
@@ -18,6 +20,18 @@ const sizeClasses = {
   md: "h-20 w-20 text-xs sm:h-24 sm:w-24 sm:text-sm",
   lg: "h-28 w-28 text-sm sm:h-36 sm:w-36 sm:text-base",
 };
+
+const bubbleClassName = (
+  size: ProductMapNodeBubbleProps["size"],
+  isCenter: boolean,
+  className?: string,
+) =>
+  cn(
+    "flex shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-white p-2 text-center font-semibold leading-tight text-white shadow-lg outline-none ring-offset-2 transition-shadow focus-visible:ring-2 focus-visible:ring-[#C6017F] focus-visible:ring-offset-[#FAF8F5]",
+    sizeClasses[size ?? "md"],
+    isCenter && "shadow-xl ring-2 ring-[#C6017F]/30",
+    className,
+  );
 
 export function ProductMapNodeBubble({
   name,
@@ -28,8 +42,27 @@ export function ProductMapNodeBubble({
   onClick,
   onContextMenu,
   animationDelay = 0,
+  variant = "default",
 }: ProductMapNodeBubbleProps) {
   const displayColor = isCenter ? PRODUCT_MAP_CENTER_COLOR : color;
+  const style = {
+    backgroundColor: displayColor,
+    boxShadow: isCenter
+      ? `0 8px 32px ${PRODUCT_MAP_CENTER_COLOR}40`
+      : `0 4px 16px ${displayColor}55`,
+  };
+
+  if (variant === "flow") {
+    return (
+      <div
+        className={bubbleClassName(size, isCenter, className)}
+        style={style}
+        title={name}
+      >
+        <span className="line-clamp-3 px-1">{name}</span>
+      </div>
+    );
+  }
 
   return (
     <motion.button
@@ -41,18 +74,8 @@ export function ProductMapNodeBubble({
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={cn(
-        "flex shrink-0 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-white p-2 text-center font-semibold leading-tight text-white shadow-lg outline-none ring-offset-2 transition-shadow focus-visible:ring-2 focus-visible:ring-[#C6017F] focus-visible:ring-offset-[#FAF8F5]",
-        sizeClasses[size],
-        isCenter && "shadow-xl ring-2 ring-[#C6017F]/30",
-        className,
-      )}
-      style={{
-        backgroundColor: displayColor,
-        boxShadow: isCenter
-          ? `0 8px 32px ${PRODUCT_MAP_CENTER_COLOR}40`
-          : `0 4px 16px ${displayColor}55`,
-      }}
+      className={bubbleClassName(size, isCenter, className)}
+      style={style}
       title={name}
     >
       <span className="line-clamp-3 px-1">{name}</span>
