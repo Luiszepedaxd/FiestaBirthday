@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, RotateCcw } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, CircleDot, GitBranch, Plus, RotateCcw } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useIsAdmin } from "@/lib/auth";
 import {
   useCreateNode,
@@ -17,11 +19,18 @@ import {
   useRootNode,
   useUpdateNode,
 } from "@/hooks/useProductMap";
+import { useAllProductMapNodes } from "@/hooks/useAllProductMapNodes";
 import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
+import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
 import { NodeEditDialog } from "@/components/product-map/NodeEditDialog";
 import { DeleteNodeDialog } from "@/components/product-map/DeleteNodeDialog";
 import { PRODUCT_MAP_BG } from "@/components/product-map/constants";
+import {
+  getStoredProductMapViewMode,
+  setStoredProductMapViewMode,
+  type ProductMapViewMode,
+} from "@/lib/product-map-view-mode";
 import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 
 type EditMode = "create" | "edit" | null;
@@ -38,6 +47,7 @@ const AdminProductMap = () => {
   const { data: root, isLoading: rootLoading, error: rootError } = useRootNode();
   const { data: globalData, isLoading: globalLoading } = useGlobalProgress();
   const { data: trackingStats } = useMapTrackingStats();
+  const [viewMode, setViewMode] = useState<ProductMapViewMode>(() => getStoredProductMapViewMode());
   const [focusId, setFocusId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [editTarget, setEditTarget] = useState<ProductMapNodeWithProgress | null>(null);
@@ -53,6 +63,11 @@ const AdminProductMap = () => {
   } = useNodesByParent(centerId);
   const { data: path = [] } = useNodePath(centerId);
   const { data: deleteChildNodes = [] } = useNodesByParent(deleteTarget?.id ?? null);
+  const {
+    data: allPanoramicNodes = [],
+    isLoading: allNodesLoading,
+    error: allNodesError,
+  } = useAllProductMapNodes();
 
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
@@ -82,6 +97,26 @@ const AdminProductMap = () => {
     }
   }, [rootError, childrenError]);
 
+  useEffect(() => {
+    if (allNodesError) {
+      toast.error("No se pudo cargar la vista panorámica");
+    }
+  }, [allNodesError]);
+
+  const handleViewModeChange = useCallback((mode: ProductMapViewMode) => {
+    setViewMode(mode);
+    setStoredProductMapViewMode(mode);
+    setContextMenu(null);
+  }, []);
+
+  const handlePanoramicNodeClick = useCallback(
+    (node: ProductMapNodeWithProgress) => {
+      setFocusId(node.id);
+      handleViewModeChange("mindly");
+    },
+    [handleViewModeChange],
+  );
+
   const canGoBack = Boolean(centerNode?.parent_id);
 
   const goBack = useCallback(() => {
@@ -98,6 +133,8 @@ const AdminProductMap = () => {
   }, [root?.id]);
 
   useEffect(() => {
+    if (viewMode !== "mindly") return;
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" || e.key === "Backspace") {
         const tag = (e.target as HTMLElement).tagName;
@@ -110,7 +147,7 @@ const AdminProductMap = () => {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canGoBack, goBack]);
+  }, [viewMode, canGoBack, goBack]);
 
   const openCreateDialog = (parent: ProductMapNodeWithProgress) => {
     setEditTarget(parent);
@@ -200,9 +237,11 @@ const AdminProductMap = () => {
       style={{ backgroundColor: PRODUCT_MAP_BG, fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
       <header className="sticky top-0 z-40 border-b border-[#F2F2F2] bg-white/95 backdrop-blur-sm">
-        <div className="mx-auto w-full max-w-5xl px-4 py-3">
+        <div
+          className={`mx-auto w-full px-4 py-3 ${viewMode === "panoramic" ? "max-w-[1600px]" : "max-w-5xl"}`}
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -213,38 +252,71 @@ const AdminProductMap = () => {
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              {isPageLoading ? (
-                <Skeleton className="h-5 w-48" />
-              ) : (
-                <ProductMapBreadcrumb
-                  path={path}
-                  onNavigate={(nodeId) => setFocusId(nodeId)}
-                />
-              )}
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Button
-                type="button"
+              <ToggleGroup
+                type="single"
                 variant="outline"
                 size="sm"
-                className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
-                onClick={resetToRoot}
-                disabled={!root || centerId === root.id}
+                value={viewMode}
+                onValueChange={(value) => {
+                  if (value === "mindly" || value === "panoramic") {
+                    handleViewModeChange(value);
+                  }
+                }}
+                className="shrink-0 rounded-xl border border-[#E5E5E5] bg-white p-0.5"
+                aria-label="Modo de vista del mapa"
               >
-                <RotateCcw className="mr-1.5 h-4 w-4" />
-                Reset
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="rounded-xl bg-[#C6017F] hover:bg-[#B10072]"
-                onClick={() => centerNode && openCreateDialog(centerNode)}
-                disabled={!centerNode}
-              >
-                <Plus className="mr-1.5 h-4 w-4" />
-                Agregar nodo
-              </Button>
+                <ToggleGroupItem
+                  value="mindly"
+                  className="rounded-lg px-3 data-[state=on]:bg-[#FFF0F9] data-[state=on]:text-[#C6017F]"
+                  aria-label="Vista Mindly"
+                >
+                  <CircleDot className="mr-1.5 h-4 w-4" />
+                  Mindly
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="panoramic"
+                  className="rounded-lg px-3 data-[state=on]:bg-[#FFF0F9] data-[state=on]:text-[#C6017F]"
+                  aria-label="Vista Panorámica"
+                >
+                  <GitBranch className="mr-1.5 h-4 w-4" />
+                  Panorámica
+                </ToggleGroupItem>
+              </ToggleGroup>
+              {viewMode === "mindly" &&
+                (isPageLoading ? (
+                  <Skeleton className="h-5 w-48" />
+                ) : (
+                  <ProductMapBreadcrumb
+                    path={path}
+                    onNavigate={(nodeId) => setFocusId(nodeId)}
+                  />
+                ))}
             </div>
+            {viewMode === "mindly" && (
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
+                  onClick={resetToRoot}
+                  disabled={!root || centerId === root.id}
+                >
+                  <RotateCcw className="mr-1.5 h-4 w-4" />
+                  Reset
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-xl bg-[#C6017F] hover:bg-[#B10072]"
+                  onClick={() => centerNode && openCreateDialog(centerNode)}
+                  disabled={!centerNode}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Agregar nodo
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="mt-3 rounded-xl border border-[#F2F2F2] bg-[#FAF8F5] px-4 py-3">
@@ -271,26 +343,63 @@ const AdminProductMap = () => {
         </div>
       </header>
 
-      <main className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-2 py-4 sm:px-4">
-        {isPageLoading ? (
-          <div className="flex flex-1 items-center justify-center p-12">
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C6017F] border-t-transparent" />
-          </div>
-        ) : (
-          <ProductMapCanvas
-            centerNode={centerNode}
-            childNodes={childNodes}
-            isLoading={isGraphLoading}
-            onSelectChild={(node) => setFocusId(node.id)}
-            onSelectCenter={goBack}
-            canGoBack={canGoBack}
-            onAddChild={() => openCreateDialog(centerNode)}
-            onNodeContextMenu={handleNodeContextMenu}
-          />
-        )}
+      <main
+        className={`mx-auto flex min-h-0 w-full flex-1 flex-col px-2 py-4 sm:px-4 ${
+          viewMode === "panoramic" ? "max-w-[1600px]" : "max-w-5xl"
+        }`}
+      >
+        <AnimatePresence mode="wait">
+          {viewMode === "mindly" ? (
+            <motion.div
+              key="mindly"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-1 flex-col"
+            >
+              {isPageLoading ? (
+                <div className="flex flex-1 items-center justify-center p-12">
+                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C6017F] border-t-transparent" />
+                </div>
+              ) : (
+                <ProductMapCanvas
+                  centerNode={centerNode}
+                  childNodes={childNodes}
+                  isLoading={isGraphLoading}
+                  onSelectChild={(node) => setFocusId(node.id)}
+                  onSelectCenter={goBack}
+                  canGoBack={canGoBack}
+                  onAddChild={() => openCreateDialog(centerNode)}
+                  onNodeContextMenu={handleNodeContextMenu}
+                />
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="panoramic"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-1 flex-col"
+            >
+              <ProductMapPanoramic
+                nodes={allPanoramicNodes}
+                isLoading={allNodesLoading}
+                onNodeClick={handlePanoramicNodeClick}
+              />
+              {!allNodesLoading && allPanoramicNodes.length > 0 && (
+                <p className="mt-2 text-center text-xs text-[#717B99]">
+                  {allPanoramicNodes.length} nodos en el árbol
+                </p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
-      {contextMenu && (
+      {viewMode === "mindly" && contextMenu && (
         <>
           <button
             type="button"
