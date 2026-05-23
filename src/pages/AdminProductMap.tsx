@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, CircleDot, GitBranch, Plus, RotateCcw } from "lucide-react";
@@ -11,8 +11,6 @@ import { useIsAdmin } from "@/lib/auth";
 import {
   useCreateNode,
   useDeleteNode,
-  useGlobalProgress,
-  useMapTrackingStats,
   useNodePath,
   useNodesByParent,
   useProductMapNode,
@@ -20,8 +18,10 @@ import {
   useUpdateNode,
 } from "@/hooks/useProductMap";
 import { useAllProductMapNodes } from "@/hooks/useAllProductMapNodes";
-import { useNodesByParents } from "@/hooks/useNodesByParents";
-import { buildChildrenBucketsMap } from "@/lib/product-map-status";
+import {
+  getCenterNodeAccentColor,
+  isVisuallyUntracked,
+} from "@/lib/product-map-status";
 import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
 import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
@@ -47,8 +47,6 @@ const AdminProductMap = () => {
   const navigate = useNavigate();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
   const { data: root, isLoading: rootLoading, error: rootError } = useRootNode();
-  const { data: globalData, isLoading: globalLoading } = useGlobalProgress();
-  const { data: trackingStats } = useMapTrackingStats();
   const [viewMode, setViewMode] = useState<ProductMapViewMode>(() => getStoredProductMapViewMode());
   const [focusId, setFocusId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>(null);
@@ -63,13 +61,6 @@ const AdminProductMap = () => {
     isLoading: childrenLoading,
     error: childrenError,
   } = useNodesByParent(centerId);
-  const childIds = useMemo(() => childNodes.map((c) => c.id), [childNodes]);
-  const { data: grandchildren = [], isLoading: grandchildrenLoading } =
-    useNodesByParents(childIds);
-  const childrenBucketsByChildId = useMemo(
-    () => buildChildrenBucketsMap(childIds, grandchildren),
-    [childIds, grandchildren],
-  );
   const { data: path = [] } = useNodePath(centerId);
   const { data: deleteChildNodes = [] } = useNodesByParent(deleteTarget?.id ?? null);
   const {
@@ -81,9 +72,6 @@ const AdminProductMap = () => {
   const createNode = useCreateNode();
   const updateNode = useUpdateNode();
   const deleteNode = useDeleteNode();
-
-  const rootName = globalData?.root?.name ?? root?.name ?? "Mapa";
-  const globalProgress = globalData?.progress ?? root?.calculated_progress ?? null;
 
   useEffect(() => {
     if (!adminLoading && !isAdmin) {
@@ -230,11 +218,26 @@ const AdminProductMap = () => {
   };
 
   const isPageLoading = adminLoading || rootLoading || !centerNode;
-  const isGraphLoading = centerLoading || childrenLoading || grandchildrenLoading;
+  const isGraphLoading = centerLoading || childrenLoading;
 
-  const progressBarValue = globalProgress ?? 0;
-  const progressLabel =
-    globalProgress === null ? "Sin tracking global" : `Avance global: ${globalProgress}%`;
+  const isAtRoot = Boolean(root?.id && centerId === root.id);
+  const centerProgress = centerNode?.calculated_progress ?? null;
+  const progressBarValue = centerProgress ?? 0;
+  const progressBarColor = centerNode
+    ? getCenterNodeAccentColor(centerNode)
+    : "#9CA3AF";
+  const progressLabel = (() => {
+    if (!centerNode) return "Mapa";
+    if (isVisuallyUntracked(centerProgress) || centerNode.status === "untracked") {
+      return `${centerNode.name} · Sin tracking`;
+    }
+    if (isAtRoot) {
+      return `${centerNode.name} · Avance global: ${centerProgress}%`;
+    }
+    return `${centerNode.name} · ${centerProgress}%`;
+  })();
+  const pathLine =
+    path.length > 0 ? path.map((n) => n.name).join(" › ") : null;
 
   if (!adminLoading && !isAdmin) {
     return null;
@@ -329,22 +332,18 @@ const AdminProductMap = () => {
           </div>
 
           <div className="mt-3 rounded-xl border border-[#F2F2F2] bg-[#FAF8F5] px-4 py-3">
-            {globalLoading ? (
+            {isPageLoading ? (
               <Skeleton className="h-10 w-full" />
             ) : (
               <>
-                <p className="text-sm font-semibold text-[#2E2D2C]">
-                  {rootName} · {progressLabel}
-                </p>
+                <p className="text-sm font-semibold text-[#2E2D2C]">{progressLabel}</p>
                 <Progress
                   value={progressBarValue}
-                  className="mt-2 h-2.5 bg-[#E5E5E5] [&>div]:bg-[#C6017F]"
+                  className="mt-2 h-2.5 bg-[#E5E5E5] [&>div]:bg-[var(--bar-color)] [&>div]:transition-all"
+                  style={{ "--bar-color": progressBarColor } as React.CSSProperties}
                 />
-                {trackingStats && (
-                  <p className="mt-2 text-xs text-[#717B99]">
-                    {trackingStats.tracked} pantallas con tracking · {trackingStats.untracked} sin
-                    tracking
-                  </p>
+                {pathLine && (
+                  <p className="mt-2 text-xs text-[#717B99]">{pathLine}</p>
                 )}
               </>
             )}
@@ -375,7 +374,6 @@ const AdminProductMap = () => {
                 <ProductMapCanvas
                   centerNode={centerNode}
                   childNodes={childNodes}
-                  childrenBucketsByChildId={childrenBucketsByChildId}
                   isLoading={isGraphLoading}
                   onSelectChild={(node) => setFocusId(node.id)}
                   onSelectCenter={goBack}

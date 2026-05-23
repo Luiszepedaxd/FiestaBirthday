@@ -78,6 +78,17 @@ export function getNodeTooltipText(
   return `${label} · ${calculatedProgress}%`;
 }
 
+export function getNodeHoverTooltip(
+  name: string,
+  status: ProductMapStatus,
+  calculatedProgress: number | null,
+): string {
+  if (status === "untracked" || calculatedProgress === null) {
+    return `${name} · Sin tracking`;
+  }
+  return `${name} · ${calculatedProgress}%`;
+}
+
 /** Visual treatment when SQL returns no aggregate progress (all descendants untracked). */
 export function isVisuallyUntracked(calculatedProgress: number | null): boolean {
   return calculatedProgress === null;
@@ -93,75 +104,12 @@ export function getColorByProgress(progress: number | null): string {
   return "#22C55E";
 }
 
-/** Bubble/pip color for a node (parent uses progress, leaf uses status). */
-export function getNodeVisualColor(
+/** Progress bar / header accent for the focused node. */
+export function getCenterNodeAccentColor(
   node: Pick<ProductMapNodeWithProgress, "children_count" | "calculated_progress" | "status">,
 ): string {
   const dimmed = isVisuallyUntracked(node.calculated_progress) || node.status === "untracked";
   if (dimmed) return getStatusColor("untracked");
   if (node.children_count > 0) return getColorByProgress(node.calculated_progress);
   return getStatusColor(node.status);
-}
-
-export type ChildBucket = "done" | "in_progress" | "pending";
-
-export type BucketCounts = {
-  done: number;
-  in_progress: number;
-  pending: number;
-};
-
-export const EMPTY_BUCKET_COUNTS: BucketCounts = {
-  done: 0,
-  in_progress: 0,
-  pending: 0,
-};
-
-export function getChildBucket(
-  child: Pick<ProductMapNodeWithProgress, "status" | "calculated_progress" | "children_count">,
-): ChildBucket {
-  if (child.children_count > 0) {
-    if (child.calculated_progress === 100) return "done";
-    if (child.calculated_progress === null || child.calculated_progress === 0) return "pending";
-    return "in_progress";
-  }
-  if (child.status === "completed") return "done";
-  if (child.status === "not_started" || child.status === "untracked") return "pending";
-  return "in_progress";
-}
-
-export function hasBucketCounts(counts: BucketCounts): boolean {
-  return counts.done + counts.in_progress + counts.pending > 0;
-}
-
-export function buildBucketCountsForChildren(
-  children: ProductMapNodeWithProgress[],
-): BucketCounts {
-  const counts: BucketCounts = { ...EMPTY_BUCKET_COUNTS };
-  for (const child of children) {
-    counts[getChildBucket(child)]++;
-  }
-  return counts;
-}
-
-/** Map each parent id to bucket counts of its direct children (for orbit pips). */
-export function buildChildrenBucketsMap(
-  parentIds: string[],
-  childNodes: ProductMapNodeWithProgress[],
-): Record<string, BucketCounts> {
-  const grouped: Record<string, ProductMapNodeWithProgress[]> = {};
-  for (const id of parentIds) grouped[id] = [];
-
-  for (const node of childNodes) {
-    const parentId = node.parent_id;
-    if (parentId && parentId in grouped) {
-      grouped[parentId].push(node);
-    }
-  }
-
-  const result: Record<string, BucketCounts> = {};
-  for (const id of parentIds) {
-    result[id] = buildBucketCountsForChildren(grouped[id] ?? []);
-  }
-  return result;
 }

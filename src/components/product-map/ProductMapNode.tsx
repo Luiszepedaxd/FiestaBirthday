@@ -8,54 +8,11 @@ import {
 import { cn } from "@/lib/utils";
 import {
   getColorByProgress,
-  getNodeTooltipText,
+  getNodeHoverTooltip,
   getStatusColor,
-  hasBucketCounts,
   isVisuallyUntracked,
-  type BucketCounts,
-  type ChildBucket,
 } from "@/lib/product-map-status";
 import type { ProductMapStatus } from "@/types/product-map";
-
-const BUCKET_COLORS: Record<ChildBucket, string> = {
-  done: "#22C55E",
-  in_progress: "#F97316",
-  pending: "#9CA3AF",
-};
-
-type NodeBucketPipsProps = {
-  counts: BucketCounts;
-  className?: string;
-};
-
-export function NodeBucketPips({ counts, className }: NodeBucketPipsProps) {
-  if (!hasBucketCounts(counts)) return null;
-
-  const items: { key: ChildBucket; count: number }[] = [];
-  if (counts.done > 0) items.push({ key: "done", count: counts.done });
-  if (counts.in_progress > 0) items.push({ key: "in_progress", count: counts.in_progress });
-  if (counts.pending > 0) items.push({ key: "pending", count: counts.pending });
-
-  return (
-    <div
-      className={cn(
-        "mt-1 flex items-center justify-center gap-1.5 text-[10px] font-semibold leading-none text-white/95",
-        className,
-      )}
-    >
-      {items.map((item) => (
-        <span key={item.key} className="inline-flex items-center gap-0.5">
-          <span
-            className="block h-2 w-2 rounded-full border border-white/40"
-            style={{ backgroundColor: BUCKET_COLORS[item.key] }}
-            aria-hidden
-          />
-          <span className="tabular-nums">{item.count}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
 
 type ProductMapNodeBubbleProps = {
   name: string;
@@ -63,7 +20,6 @@ type ProductMapNodeBubbleProps = {
   calculatedProgress: number | null;
   isCenter?: boolean;
   childrenCount?: number;
-  childrenBuckets?: BucketCounts;
   size?: "sm" | "md" | "lg";
   className?: string;
   onClick?: () => void;
@@ -140,7 +96,6 @@ function BubbleContent({
   className,
   dimmed,
   childrenCount,
-  childrenBuckets,
 }: {
   name: string;
   status: ProductMapStatus;
@@ -150,7 +105,6 @@ function BubbleContent({
   className?: string;
   dimmed: boolean;
   childrenCount?: number;
-  childrenBuckets?: BucketCounts;
 }) {
   const isParent = (childrenCount ?? 0) > 0;
   const displayColor = dimmed
@@ -160,8 +114,6 @@ function BubbleContent({
       : getStatusColor(status);
   const showProgressLabel =
     isCenter && calculatedProgress !== null && !dimmed;
-  const showPips =
-    !isCenter && childrenBuckets !== undefined && hasBucketCounts(childrenBuckets);
 
   return (
     <div
@@ -185,7 +137,6 @@ function BubbleContent({
           {calculatedProgress}%
         </span>
       )}
-      {showPips && <NodeBucketPips counts={childrenBuckets!} />}
     </div>
   );
 }
@@ -196,7 +147,6 @@ export function ProductMapNodeBubble({
   calculatedProgress,
   isCenter = false,
   childrenCount,
-  childrenBuckets,
   size = "md",
   className,
   onClick,
@@ -212,8 +162,9 @@ export function ProductMapNodeBubble({
     : isParent
       ? getColorByProgress(calculatedProgress)
       : getStatusColor(status);
-  const showRing = calculatedProgress !== null && !dimmed;
-  const tooltip = getNodeTooltipText(status, calculatedProgress);
+  const showRing =
+    isCenter && calculatedProgress !== null && !dimmed;
+  const tooltip = getNodeHoverTooltip(name, status, calculatedProgress);
 
   const inner = (
     <div className="relative flex items-center justify-center" style={{ width: px, height: px }}>
@@ -229,7 +180,6 @@ export function ProductMapNodeBubble({
         className={className}
         dimmed={dimmed}
         childrenCount={childrenCount}
-        childrenBuckets={childrenBuckets}
       />
     </div>
   );

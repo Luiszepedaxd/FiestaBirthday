@@ -22,11 +22,11 @@ import { PRODUCT_MAP_BG } from "./constants";
 import {
   PanoramicNode,
   formatPanoramicLabel,
-  getPanoramicNodeHeight,
+  PANORAMIC_NODE_HEIGHT,
   PANORAMIC_NODE_WIDTH,
   type PanoramicNodeData,
 } from "./PanoramicNode";
-import { buildBucketCountsForChildren, getStatusColor } from "@/lib/product-map-status";
+import { getStatusColor } from "@/lib/product-map-status";
 
 const CANVAS_MIN_HEIGHT_PX = 560;
 
@@ -45,10 +45,7 @@ function applyDagreLayout(
   g.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 50 });
 
   nodes.forEach((node) => {
-    g.setNode(node.id, {
-      width: PANORAMIC_NODE_WIDTH,
-      height: getPanoramicNodeHeight(node.data.childrenBuckets),
-    });
+    g.setNode(node.id, { width: PANORAMIC_NODE_WIDTH, height: PANORAMIC_NODE_HEIGHT });
   });
 
   edges.forEach((edge) => {
@@ -59,12 +56,11 @@ function applyDagreLayout(
 
   const layoutedNodes = nodes.map((node) => {
     const pos = g.node(node.id);
-    const nodeHeight = getPanoramicNodeHeight(node.data.childrenBuckets);
     return {
       ...node,
       position: {
         x: pos.x - PANORAMIC_NODE_WIDTH / 2,
-        y: pos.y - nodeHeight / 2,
+        y: pos.y - PANORAMIC_NODE_HEIGHT / 2,
       },
       targetPosition: Position.Top,
       sourcePosition: Position.Bottom,
@@ -78,21 +74,7 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
   nodes: PanoramicFlowNode[];
   edges: Edge[];
 } {
-  const childrenByParent = new Map<string, ProductMapNodeWithProgress[]>();
-  for (const node of allNodes) {
-    if (node.parent_id === null) continue;
-    const siblings = childrenByParent.get(node.parent_id) ?? [];
-    siblings.push(node);
-    childrenByParent.set(node.parent_id, siblings);
-  }
-
-  const nodes: PanoramicFlowNode[] = allNodes.map((n) => {
-    const directChildren = (childrenByParent.get(n.id) ?? []).sort(
-      (a, b) => a.position - b.position,
-    );
-    const childrenBuckets = buildBucketCountsForChildren(directChildren);
-
-    return {
+  const nodes: PanoramicFlowNode[] = allNodes.map((n) => ({
     id: n.id,
     type: "panoramic",
     position: { x: 0, y: 0 },
@@ -102,13 +84,11 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
       status: n.status,
       calculatedProgress: n.calculated_progress,
       childrenCount: n.children_count,
-      childrenBuckets,
     },
     draggable: false,
     selectable: true,
     connectable: false,
-  };
-  });
+  }));
 
   const edges: Edge[] = allNodes
     .filter((n) => n.parent_id !== null)
@@ -129,15 +109,17 @@ export type ProductMapPanoramicProps = {
   onNodeClick: (node: ProductMapNodeWithProgress) => void;
 };
 
-function PanoramicFlowInner({ nodes: allNodes, isLoading, onNodeClick }: ProductMapPanoramicProps) {
+function PanoramicCanvasInner({
+  nodes: allNodes,
+  isLoading,
+  onNodeClick,
+}: ProductMapPanoramicProps) {
   const { fitView } = useReactFlow();
 
   const graph = useMemo(() => buildPanoramicGraph(allNodes), [allNodes]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<PanoramicFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-
-  const nodeById = useMemo(() => new Map(allNodes.map((n) => [n.id, n])), [allNodes]);
 
   useEffect(() => {
     setNodes(graph.nodes);
@@ -147,28 +129,24 @@ function PanoramicFlowInner({ nodes: allNodes, isLoading, onNodeClick }: Product
   useEffect(() => {
     if (nodes.length === 0) return;
     const timer = window.setTimeout(() => {
-      void fitView({ padding: 0.15, duration: 400, minZoom: 0.05, maxZoom: 1 });
+      void fitView({ padding: 0.2, duration: 300, minZoom: 0.15, maxZoom: 1 });
     }, 150);
     return () => window.clearTimeout(timer);
-  }, [fitView, nodes.length, edges.length]);
-
-  const handleFitView = useCallback(() => {
-    void fitView({ padding: 0.15, duration: 300, minZoom: 0.05, maxZoom: 1 });
-  }, [fitView]);
+  }, [fitView, nodes, edges, allNodes.length]);
 
   const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: PanoramicFlowNode) => {
-      const selected = nodeById.get(node.id);
+    (_event: React.MouseEvent, node: Node<PanoramicNodeData>) => {
+      const selected = allNodes.find((n) => n.id === node.id);
       if (selected) onNodeClick(selected);
     },
-    [nodeById, onNodeClick],
+    [allNodes, onNodeClick],
   );
 
   if (isLoading) {
     return (
       <div
         className="flex items-center justify-center p-12"
-        style={{ width: "100%", minHeight: CANVAS_MIN_HEIGHT_PX }}
+        style={{ minHeight: CANVAS_MIN_HEIGHT_PX }}
       >
         <Skeleton className="h-64 w-full max-w-2xl rounded-2xl" />
       </div>
@@ -178,24 +156,8 @@ function PanoramicFlowInner({ nodes: allNodes, isLoading, onNodeClick }: Product
   return (
     <div
       className="relative w-full overflow-hidden rounded-2xl border border-[#F2F2F2]"
-      style={{ width: "100%", minHeight: CANVAS_MIN_HEIGHT_PX, height: "min(75vh, 720px)" }}
+      style={{ minHeight: CANVAS_MIN_HEIGHT_PX, height: "min(70vh, 720px)" }}
     >
-      <p className="pointer-events-none absolute right-3 top-3 z-10 rounded-lg bg-white/90 px-2.5 py-1 text-xs text-[#717B99] shadow-sm backdrop-blur-sm">
-        Click en cualquier nodo para enfocarlo
-      </p>
-
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="absolute left-3 top-3 z-10 rounded-xl border-[#E5E5E5] bg-white/95 text-[#2E2D2C] shadow-sm backdrop-blur-sm hover:bg-[#FFF0F9]"
-        onClick={handleFitView}
-        aria-label="Ajustar a pantalla"
-      >
-        <Maximize2 className="mr-1.5 h-4 w-4" />
-        Ajustar
-      </Button>
-
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -209,26 +171,41 @@ function PanoramicFlowInner({ nodes: allNodes, isLoading, onNodeClick }: Product
         panOnDrag
         zoomOnScroll
         zoomOnPinch
-        minZoom={0.02}
-        maxZoom={2}
+        minZoom={0.1}
+        maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
         style={{ width: "100%", height: "100%", background: PRODUCT_MAP_BG }}
       >
-        <Background color="#E5E5E5" gap={20} size={1} />
+        <Background color="#E5E5E5" gap={24} size={1} />
         <Controls
-          position="bottom-left"
           showInteractive={false}
-          className="!rounded-xl !border-[#E5E5E5] !bg-white/95 !shadow-sm"
+          className="!rounded-xl !border-[#E5E5E5] !bg-white !shadow-sm"
         />
         <MiniMap
-          position="bottom-right"
-          pannable
-          zoomable
-          className="!rounded-xl !border-[#E5E5E5] !bg-white/95"
-          nodeColor={(node) => getStatusColor(node.data?.status ?? "untracked")}
+          nodeColor={(node) => {
+            const d = node.data as PanoramicNodeData;
+            if (d.status === "untracked" || d.calculatedProgress === null) {
+              return getStatusColor("untracked");
+            }
+            return d.childrenCount > 0
+              ? getStatusColor("development")
+              : getStatusColor(d.status);
+          }}
+          className="!rounded-xl !border-[#E5E5E5] !bg-white/90"
           maskColor="rgba(250, 248, 245, 0.75)"
         />
       </ReactFlow>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-xl border-[#E5E5E5] bg-white shadow-sm"
+        onClick={() => void fitView({ padding: 0.2, duration: 300 })}
+        aria-label="Ajustar vista"
+      >
+        <Maximize2 className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
@@ -236,7 +213,7 @@ function PanoramicFlowInner({ nodes: allNodes, isLoading, onNodeClick }: Product
 export function ProductMapPanoramic(props: ProductMapPanoramicProps) {
   return (
     <ReactFlowProvider>
-      <PanoramicFlowInner {...props} />
+      <PanoramicCanvasInner {...props} />
     </ReactFlowProvider>
   );
 }

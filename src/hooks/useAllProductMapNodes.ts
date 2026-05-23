@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { productMapKeys } from "@/hooks/useProductMap";
+import { productMapKeys, PRODUCT_MAP_NODE_VIEW_COLUMNS } from "@/hooks/useProductMap";
 import type { ProductMapNodeWithProgress } from "@/types/product-map";
 
 const NODE_VIEW = "product_map_nodes_with_progress";
 
-const NODE_VIEW_COLUMNS = "*";
+const NODE_VIEW_COLUMNS = PRODUCT_MAP_NODE_VIEW_COLUMNS;
 
 export const allProductMapNodesKey = [...productMapKeys.all, "all-nodes"] as const;
 
