@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 const CENTER_NODE_ID = "__center__";
 const CANVAS_HEIGHT_PX = 520;
 const ORBIT_RADIUS_FACTOR = 0.42;
+const CLICK_DELAY_MS = 250;
 
 type FlowNodeData = {
   label: string;
@@ -199,7 +200,17 @@ function FlowCanvasInner({
 }: FlowCanvasInnerProps) {
   const { fitView } = useReactFlow();
   const flowAreaRef = useRef<HTMLDivElement>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flowSize, setFlowSize] = useState({ width: 800, height: CANVAS_HEIGHT_PX });
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const el = flowAreaRef.current;
@@ -254,18 +265,28 @@ function FlowCanvasInner({
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
-      if (node.id === CENTER_NODE_ID) {
-        if (canGoBack) onSelectCenter();
-        return;
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
       }
-      const selected = childNodes.find((c) => c.id === node.id);
-      if (selected) onSelectChild(selected);
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        if (node.id === CENTER_NODE_ID) {
+          if (canGoBack) onSelectCenter();
+          return;
+        }
+        const selected = childNodes.find((c) => c.id === node.id);
+        if (selected) onSelectChild(selected);
+      }, CLICK_DELAY_MS);
     },
     [canGoBack, childNodes, onSelectCenter, onSelectChild],
   );
 
   const handleNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
       if (!onNodeDoubleClick) return;
       const nodeId = node.id === CENTER_NODE_ID ? centerNode.id : node.id;
       onNodeDoubleClick(nodeId);
@@ -342,7 +363,7 @@ function FlowCanvasInner({
         </div>
       </div>
       <p className="mt-4 text-center text-xs text-[#717B99]">
-        Click para navegar · Doble click para detalles
+        Click para detalles · Doble click para navegar
         {canGoBack ? " · Esc o ← atrás" : ""}
       </p>
     </div>
