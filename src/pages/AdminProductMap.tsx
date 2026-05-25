@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, CircleDot, GitBranch, Plus, RotateCcw } from "lucide-react";
+import { ArrowLeft, CircleDot, GitBranch, Network, Plus, RotateCcw } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +23,8 @@ import {
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
 import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
+import { ProductMapGraph } from "@/components/product-map/ProductMapGraph";
+import { NodeDetailSheet } from "@/components/product-map/NodeDetailSheet";
 import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
 import { NodeEditDialog } from "@/components/product-map/NodeEditDialog";
@@ -53,6 +55,7 @@ const AdminProductMap = () => {
   const [editTarget, setEditTarget] = useState<ProductMapNodeWithProgress | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProductMapNodeWithProgress | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
 
   const centerId = focusId ?? root?.id ?? null;
   const { data: centerNode, isLoading: centerLoading } = useProductMapNode(centerId);
@@ -239,6 +242,11 @@ const AdminProductMap = () => {
   const pathLine =
     path.length > 0 ? path.map((n) => n.name).join(" › ") : null;
 
+  const trackedNodeCount = allPanoramicNodes.filter((n) => n.status !== "untracked").length;
+  const rootProgress = root?.calculated_progress ?? null;
+  const rootBarColor = root ? getCenterNodeAccentColor(root) : "#9CA3AF";
+  const isDetailOpen = detailNodeId !== null;
+
   if (!adminLoading && !isAdmin) {
     return null;
   }
@@ -250,7 +258,7 @@ const AdminProductMap = () => {
     >
       <header className="sticky top-0 z-40 border-b border-[#F2F2F2] bg-white/95 backdrop-blur-sm">
         <div
-          className={`mx-auto w-full px-4 py-3 ${viewMode === "panoramic" ? "max-w-[1600px]" : "max-w-5xl"}`}
+          className={`mx-auto w-full px-4 py-3 ${viewMode === "panoramic" || viewMode === "graph" ? "max-w-[1600px]" : "max-w-5xl"}`}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -270,7 +278,7 @@ const AdminProductMap = () => {
                 size="sm"
                 value={viewMode}
                 onValueChange={(value) => {
-                  if (value === "mindly" || value === "panoramic") {
+                  if (value === "mindly" || value === "panoramic" || value === "graph") {
                     handleViewModeChange(value);
                   }
                 }}
@@ -292,6 +300,14 @@ const AdminProductMap = () => {
                 >
                   <GitBranch className="mr-1.5 h-4 w-4" />
                   Panorámica
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="graph"
+                  className="rounded-lg px-3 data-[state=on]:bg-[#FFF0F9] data-[state=on]:text-[#C6017F]"
+                  aria-label="Vista Grafo"
+                >
+                  <Network className="mr-1.5 h-4 w-4" />
+                  Grafo
                 </ToggleGroupItem>
               </ToggleGroup>
               {viewMode === "mindly" &&
@@ -332,7 +348,34 @@ const AdminProductMap = () => {
           </div>
 
           <div className="mt-3 rounded-xl border border-[#F2F2F2] bg-[#FAF8F5] px-4 py-3">
-            {isPageLoading ? (
+            {viewMode === "graph" ? (
+              allNodesLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-[#2E2D2C]">
+                    Grafo · {allPanoramicNodes.length} nodos · {trackedNodeCount} con tracking
+                  </p>
+                  {root && (
+                    <>
+                      <p className="mt-1 text-xs text-[#717B99]">
+                        {root.name}
+                        {rootProgress !== null
+                          ? ` · Avance global: ${rootProgress}%`
+                          : " · Sin tracking global"}
+                      </p>
+                      {rootProgress !== null && (
+                        <Progress
+                          value={rootProgress}
+                          className="mt-2 h-2.5 bg-[#E5E5E5] [&>div]:bg-[var(--bar-color)] [&>div]:transition-all"
+                          style={{ "--bar-color": rootBarColor } as React.CSSProperties}
+                        />
+                      )}
+                    </>
+                  )}
+                </>
+              )
+            ) : isPageLoading ? (
               <Skeleton className="h-10 w-full" />
             ) : (
               <>
@@ -353,11 +396,11 @@ const AdminProductMap = () => {
 
       <main
         className={`mx-auto flex min-h-0 w-full flex-1 flex-col px-2 py-4 sm:px-4 ${
-          viewMode === "panoramic" ? "max-w-[1600px]" : "max-w-5xl"
+          viewMode === "panoramic" || viewMode === "graph" ? "max-w-[1600px]" : "max-w-5xl"
         }`}
       >
         <AnimatePresence mode="wait">
-          {viewMode === "mindly" ? (
+          {viewMode === "mindly" && (
             <motion.div
               key="mindly"
               initial={{ opacity: 0 }}
@@ -383,7 +426,8 @@ const AdminProductMap = () => {
                 />
               )}
             </motion.div>
-          ) : (
+          )}
+          {viewMode === "panoramic" && (
             <motion.div
               key="panoramic"
               initial={{ opacity: 0 }}
@@ -402,6 +446,22 @@ const AdminProductMap = () => {
                   {allPanoramicNodes.length} nodos en el árbol
                 </p>
               )}
+            </motion.div>
+          )}
+          {viewMode === "graph" && (
+            <motion.div
+              key="graph"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-1 flex-col"
+            >
+              <ProductMapGraph
+                nodes={allPanoramicNodes}
+                isLoading={allNodesLoading}
+                onNodeClick={(node) => setDetailNodeId(node.id)}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -469,6 +529,22 @@ const AdminProductMap = () => {
         submitLabel={editMode === "create" ? "Crear" : "Guardar"}
         isSubmitting={createNode.isPending || updateNode.isPending}
         onSubmit={(values) => void handleEditSubmit(values)}
+      />
+
+      <NodeDetailSheet
+        open={isDetailOpen}
+        nodeId={detailNodeId}
+        onClose={() => setDetailNodeId(null)}
+        allNodes={allPanoramicNodes}
+        onEditNode={(node) => {
+          setDetailNodeId(null);
+          openEditDialog(node);
+        }}
+        onFocusInMindly={(nodeId) => {
+          setFocusId(nodeId);
+          setDetailNodeId(null);
+          handleViewModeChange("mindly");
+        }}
       />
 
       <DeleteNodeDialog

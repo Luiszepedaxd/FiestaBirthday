@@ -1,12 +1,16 @@
-export type ProductMapViewMode = "mindly" | "panoramic";
+export type ProductMapViewMode = "mindly" | "panoramic" | "graph";
 
 export const PRODUCT_MAP_VIEW_MODE_KEY = "product-map-view-mode";
+
+const VALID_MODES: ProductMapViewMode[] = ["mindly", "panoramic", "graph"];
 
 export function getStoredProductMapViewMode(): ProductMapViewMode {
   if (typeof window === "undefined") return "mindly";
   try {
     const stored = localStorage.getItem(PRODUCT_MAP_VIEW_MODE_KEY);
-    if (stored === "panoramic" || stored === "mindly") return stored;
+    if (stored && VALID_MODES.includes(stored as ProductMapViewMode)) {
+      return stored as ProductMapViewMode;
+    }
   } catch {
     /* ignore */
   }
