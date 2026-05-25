@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { FileText } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -12,7 +13,7 @@ import {
   getStatusColor,
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
-import type { ProductMapStatus } from "@/types/product-map";
+import type { ProductMapStatus, TimeHealth } from "@/types/product-map";
 
 type ProductMapNodeBubbleProps = {
   name: string;
@@ -26,6 +27,8 @@ type ProductMapNodeBubbleProps = {
   onContextMenu?: (event: React.MouseEvent) => void;
   animationDelay?: number;
   variant?: "default" | "flow";
+  hasNotes?: boolean;
+  timeHealth?: TimeHealth;
 };
 
 const sizePx = {
@@ -87,6 +90,21 @@ function ProgressDonut({
   );
 }
 
+function TimeHealthBadge({ timeHealth }: { timeHealth: TimeHealth }) {
+  if (timeHealth !== "overdue" && timeHealth !== "at_risk") return null;
+  const isOverdue = timeHealth === "overdue";
+  return (
+    <span
+      className={cn(
+        "absolute -top-2 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-bold text-white shadow-sm",
+        isOverdue ? "bg-[#EF4444]" : "bg-[#F59E0B]",
+      )}
+    >
+      {isOverdue ? "Atrasado" : "En riesgo"}
+    </span>
+  );
+}
+
 function BubbleContent({
   name,
   status,
@@ -96,6 +114,7 @@ function BubbleContent({
   className,
   dimmed,
   childrenCount,
+  hasNotes,
 }: {
   name: string;
   status: ProductMapStatus;
@@ -105,6 +124,7 @@ function BubbleContent({
   className?: string;
   dimmed: boolean;
   childrenCount?: number;
+  hasNotes?: boolean;
 }) {
   const isParent = (childrenCount ?? 0) > 0;
   const displayColor = dimmed
@@ -137,6 +157,13 @@ function BubbleContent({
           {calculatedProgress}%
         </span>
       )}
+      {hasNotes && (
+        <FileText
+          className="absolute bottom-1.5 right-1.5 text-white opacity-70"
+          size={10}
+          aria-hidden
+        />
+      )}
     </div>
   );
 }
@@ -153,6 +180,8 @@ export function ProductMapNodeBubble({
   onContextMenu,
   animationDelay = 0,
   variant = "default",
+  hasNotes = false,
+  timeHealth,
 }: ProductMapNodeBubbleProps) {
   const dimmed = isVisuallyUntracked(calculatedProgress) || status === "untracked";
   const px = sizePx[size];
@@ -168,6 +197,7 @@ export function ProductMapNodeBubble({
 
   const inner = (
     <div className="relative flex items-center justify-center" style={{ width: px, height: px }}>
+      {timeHealth && <TimeHealthBadge timeHealth={timeHealth} />}
       {showRing && (
         <ProgressDonut size={px} progress={calculatedProgress} strokeColor={ringColor} />
       )}
@@ -180,6 +210,7 @@ export function ProductMapNodeBubble({
         className={className}
         dimmed={dimmed}
         childrenCount={childrenCount}
+        hasNotes={hasNotes}
       />
     </div>
   );

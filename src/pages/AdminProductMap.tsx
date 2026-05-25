@@ -109,7 +109,16 @@ const AdminProductMap = () => {
     setContextMenu(null);
   }, []);
 
-  const handlePanoramicNodeClick = useCallback(
+  const handleOpenNodeDetail = useCallback((nodeId: string) => {
+    setDetailNodeId(nodeId);
+    setContextMenu(null);
+  }, []);
+
+  const handlePanoramicNodeClick = useCallback((node: ProductMapNodeWithProgress) => {
+    setDetailNodeId(node.id);
+  }, []);
+
+  const handlePanoramicNodeDoubleClick = useCallback(
     (node: ProductMapNodeWithProgress) => {
       setFocusId(node.id);
       handleViewModeChange("mindly");
@@ -440,10 +449,12 @@ const AdminProductMap = () => {
                 nodes={allPanoramicNodes}
                 isLoading={allNodesLoading}
                 onNodeClick={handlePanoramicNodeClick}
+                onNodeDoubleClick={handlePanoramicNodeDoubleClick}
               />
               {!allNodesLoading && allPanoramicNodes.length > 0 && (
                 <p className="mt-2 text-center text-xs text-[#717B99]">
-                  {allPanoramicNodes.length} nodos en el árbol
+                  {allPanoramicNodes.length} nodos en el árbol · Click para detalles · Doble click
+                  para vista Foco
                 </p>
               )}
             </motion.div>
@@ -480,6 +491,13 @@ const AdminProductMap = () => {
             style={{ left: contextMenu.x, top: contextMenu.y }}
             role="menu"
           >
+            <button
+              type="button"
+              className="w-full px-3 py-2 text-left text-sm hover:bg-[#FFF0F9]"
+              onClick={() => handleOpenNodeDetail(contextMenu.node.id)}
+            >
+              Ver detalles
+            </button>
             <button
               type="button"
               className="w-full px-3 py-2 text-left text-sm hover:bg-[#FFF0F9]"

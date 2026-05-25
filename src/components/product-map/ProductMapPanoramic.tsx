@@ -84,6 +84,8 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
       status: n.status,
       calculatedProgress: n.calculated_progress,
       childrenCount: n.children_count,
+      hasNotes: n.has_notes,
+      timeHealth: n.time_health,
     },
     draggable: false,
     selectable: true,
@@ -107,12 +109,14 @@ export type ProductMapPanoramicProps = {
   nodes: ProductMapNodeWithProgress[];
   isLoading: boolean;
   onNodeClick: (node: ProductMapNodeWithProgress) => void;
+  onNodeDoubleClick?: (node: ProductMapNodeWithProgress) => void;
 };
 
 function PanoramicCanvasInner({
   nodes: allNodes,
   isLoading,
   onNodeClick,
+  onNodeDoubleClick,
 }: ProductMapPanoramicProps) {
   const { fitView } = useReactFlow();
 
@@ -142,6 +146,14 @@ function PanoramicCanvasInner({
     [allNodes, onNodeClick],
   );
 
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node<PanoramicNodeData>) => {
+      const selected = allNodes.find((n) => n.id === node.id);
+      if (selected) onNodeDoubleClick?.(selected);
+    },
+    [allNodes, onNodeDoubleClick],
+  );
+
   if (isLoading) {
     return (
       <div
@@ -165,6 +177,7 @@ function PanoramicCanvasInner({
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable

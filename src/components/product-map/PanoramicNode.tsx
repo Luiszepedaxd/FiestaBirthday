@@ -12,7 +12,8 @@ import {
   getStatusColor,
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
-import type { ProductMapStatus } from "@/types/product-map";
+import { getTimeHealthStroke } from "@/lib/time-health";
+import type { ProductMapStatus, TimeHealth } from "@/types/product-map";
 
 export const PANORAMIC_NODE_WIDTH = 140;
 export const PANORAMIC_NODE_HEIGHT = 40;
@@ -23,6 +24,8 @@ export type PanoramicNodeData = {
   status: ProductMapStatus;
   calculatedProgress: number | null;
   childrenCount: number;
+  hasNotes: boolean;
+  timeHealth: TimeHealth;
 };
 
 export function formatPanoramicLabel(
@@ -38,12 +41,14 @@ export function formatPanoramicLabel(
 function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: PanoramicNodeData }>) {
   const dimmed = isVisuallyUntracked(data.calculatedProgress) || data.status === "untracked";
   const isParent = data.childrenCount > 0;
-  const borderColor = dimmed
+  const statusBorderColor = dimmed
     ? getStatusColor("untracked")
     : isParent
       ? getColorByProgress(data.calculatedProgress)
       : getStatusColor(data.status);
-  const bgColor = borderColor;
+  const healthStroke = getTimeHealthStroke(data.timeHealth);
+  const borderColor = healthStroke ?? statusBorderColor;
+  const bgColor = statusBorderColor;
 
   const tooltip = getNodeHoverTooltip(data.fullName, data.status, data.calculatedProgress);
 
@@ -52,14 +57,21 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className="nodrag nopan flex cursor-pointer items-center justify-center rounded-md border px-2 py-1 shadow-sm transition-shadow hover:shadow-md"
+            className="nodrag nopan relative flex cursor-pointer items-center justify-center rounded-md border px-2 py-1 shadow-sm transition-shadow hover:shadow-md"
             style={{
               width: PANORAMIC_NODE_WIDTH,
               height: PANORAMIC_NODE_HEIGHT,
               borderColor,
+              borderWidth: healthStroke ? 2 : 1,
               backgroundColor: `${bgColor}33`,
             }}
           >
+            {data.hasNotes && (
+              <span
+                className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-white shadow-sm ring-1 ring-[#2E2D2C]/20"
+                aria-hidden
+              />
+            )}
             <Handle
               type="target"
               position={Position.Top}

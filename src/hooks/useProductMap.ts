@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { getStatusColor } from "@/lib/product-map-status";
+import type { JSONContent } from "@tiptap/react";
 import type {
   CreateProductMapNodeInput,
   DeleteProductMapNodeInput,
@@ -12,7 +13,7 @@ import type {
 const NODE_VIEW = "product_map_nodes_with_progress";
 
 export const PRODUCT_MAP_NODE_VIEW_COLUMNS =
-  "id, name, parent_id, color, position, description, status, created_at, updated_at, created_by, calculated_progress, children_count, untracked_children_count";
+  "id, name, parent_id, color, position, description, status, created_at, updated_at, created_by, notes, notes_plain_text, target_date, notes_updated_at, calculated_progress, children_count, untracked_children_count, time_health, has_notes";
 
 const NODE_VIEW_COLUMNS = PRODUCT_MAP_NODE_VIEW_COLUMNS;
 
@@ -238,6 +239,65 @@ export function useDeleteNode() {
     mutationFn: async (input: DeleteProductMapNodeInput): Promise<void> => {
       const { error } = await supabase.from("product_map_nodes").delete().eq("id", input.id);
       if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAllProductMapQueries(queryClient);
+    },
+  });
+}
+
+export function useUpdateNodeNotes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      nodeId,
+      notes,
+      notesPlainText,
+    }: {
+      nodeId: string;
+      notes: JSONContent;
+      notesPlainText: string;
+    }): Promise<ProductMapNodeWithProgress> => {
+      const { error } = await supabase
+        .from("product_map_nodes")
+        .update({
+          notes,
+          notes_plain_text: notesPlainText,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", nodeId);
+
+      if (error) throw error;
+      return fetchNodeById(nodeId);
+    },
+    onSuccess: () => {
+      invalidateAllProductMapQueries(queryClient);
+    },
+  });
+}
+
+export function useUpdateNodeTargetDate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      nodeId,
+      targetDate,
+    }: {
+      nodeId: string;
+      targetDate: string | null;
+    }): Promise<ProductMapNodeWithProgress> => {
+      const { error } = await supabase
+        .from("product_map_nodes")
+        .update({
+          target_date: targetDate,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", nodeId);
+
+      if (error) throw error;
+      return fetchNodeById(nodeId);
     },
     onSuccess: () => {
       invalidateAllProductMapQueries(queryClient);

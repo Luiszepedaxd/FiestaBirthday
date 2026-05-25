@@ -8,6 +8,7 @@ import {
   getGraphNodeColor,
   getGraphNodeRadius,
 } from "@/lib/product-map-graph";
+import { getTimeHealthStroke } from "@/lib/time-health";
 import { PRODUCT_MAP_BG } from "./constants";
 import type { ProductMapNodeWithProgress } from "@/types/product-map";
 
@@ -121,14 +122,28 @@ export function ProductMapGraph({ nodes, isLoading, onNodeClick }: ProductMapGra
 
       const isHovered = hoveredNode?.id === node.id;
       const radius = node.baseRadius * (isHovered ? 1.3 : 1);
+      const healthStroke = getTimeHealthStroke(node.raw.time_health);
 
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
       ctx.fillStyle = node.color;
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.lineWidth = 1.5 / globalScale;
+      ctx.strokeStyle = healthStroke ?? "rgba(255,255,255,0.85)";
+      ctx.lineWidth = healthStroke ? 2.5 / globalScale : 1.5 / globalScale;
       ctx.stroke();
+
+      if (node.raw.has_notes) {
+        const dotR = Math.max(2 / globalScale, 1.2);
+        const dotX = node.x + radius * 0.65;
+        const dotY = node.y - radius * 0.65;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotR, 0, 2 * Math.PI);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(46, 45, 44, 0.35)";
+        ctx.lineWidth = 0.75 / globalScale;
+        ctx.stroke();
+      }
 
       const showLabel = isHovered || globalScale >= LABEL_MIN_SCALE;
       if (showLabel) {

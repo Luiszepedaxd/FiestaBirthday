@@ -15,7 +15,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
-import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
+import type { ProductMapNodeWithProgress, ProductMapStatus, TimeHealth } from "@/types/product-map";
 import { ProductMapNodeBubble } from "./ProductMapNode";
 import { PRODUCT_MAP_BG } from "./constants";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ type FlowNodeData = {
   isCenter: boolean;
   animationDelay: number;
   childrenCount: number;
+  hasNotes: boolean;
+  timeHealth: TimeHealth;
 };
 
 type ProductMapFlowNodeType = Node<FlowNodeData, "productMapBubble">;
@@ -62,6 +64,8 @@ function ProductMapFlowNode({ data }: NodeProps<ProductMapFlowNodeType>) {
         size={data.isCenter ? "lg" : "md"}
         animationDelay={data.animationDelay ?? 0}
         variant="flow"
+        hasNotes={data.hasNotes}
+        timeHealth={data.timeHealth}
       />
       <Handle
         type="source"
@@ -103,6 +107,8 @@ function buildGraph(
         isCenter: true,
         animationDelay: 0,
         childrenCount: centerNode.children_count,
+        hasNotes: centerNode.has_notes,
+        timeHealth: centerNode.time_health,
       },
       draggable: false,
       selectable: true,
@@ -128,6 +134,8 @@ function buildGraph(
         isCenter: false,
         animationDelay: 0.05 + index * 0.04,
         childrenCount: child.children_count,
+        hasNotes: child.has_notes,
+        timeHealth: child.time_health,
       },
       draggable: false,
       selectable: true,
