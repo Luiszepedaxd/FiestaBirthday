@@ -22,8 +22,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 const CENTER_NODE_ID = "__center__";
-const CANVAS_HEIGHT_PX = 520;
-const ORBIT_RADIUS_FACTOR = 0.42;
+const ORBIT_RADIUS_MIN = 200;
+const ORBIT_RADIUS_MAX = 500;
+const CLICK_DELAY_MS = 250;
 
 type FlowNodeData = {
   label: string;
@@ -83,25 +84,22 @@ const nodeTypes = {
   productMapBubble: ProductMapFlowNode,
 };
 
-function getPreferredRadialRadius(childCount: number, isMobile: boolean): number {
-  const base = isMobile ? 130 : 200;
-  if (childCount <= 6) return base;
-  if (childCount <= 12) return base + 50;
-  return base + 90;
+function getOrbitRadiusFactor(childCount: number): number {
+  if (childCount > 8) return 0.4;
+  if (childCount < 4) return 0.32;
+  return 0.35;
 }
 
 function getSafeOrbitRadius(
   containerWidth: number,
   containerHeight: number,
   childCount: number,
-  isMobile: boolean,
 ): number {
   const usableW = Math.max(0, containerWidth - PRODUCT_MAP_CANVAS_SAFE_PADDING_PX * 2);
   const usableH = Math.max(0, containerHeight - PRODUCT_MAP_CANVAS_SAFE_PADDING_PX * 2);
-  const maxFromContainer = Math.min(usableW, usableH) * ORBIT_RADIUS_FACTOR;
-  const preferred = getPreferredRadialRadius(childCount, isMobile);
-  if (maxFromContainer <= 0) return preferred;
-  return Math.min(preferred, maxFromContainer);
+  const usableDim = Math.min(usableW, usableH);
+  const raw = usableDim * getOrbitRadiusFactor(childCount);
+  return Math.max(ORBIT_RADIUS_MIN, Math.min(ORBIT_RADIUS_MAX, raw));
 }
 
 function buildGraph(
@@ -199,30 +197,34 @@ function FlowCanvasInner({
 }: FlowCanvasInnerProps) {
   const { fitView } = useReactFlow();
   const flowAreaRef = useRef<HTMLDivElement>(null);
-  const [flowSize, setFlowSize] = useState({ width: 800, height: CANVAS_HEIGHT_PX });
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [flowSize, setFlowSize] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
     const el = flowAreaRef.current;
     if (!el) return;
 
-    const updateSize = () => {
-      const rect = el.getBoundingClientRect();
-      setFlowSize({ width: rect.width, height: rect.height });
-    };
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setFlowSize({ width, height });
+    });
 
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
-  const isMobile = flowSize.width < 640;
-  const radius = getSafeOrbitRadius(
-    flowSize.width,
-    flowSize.height,
-    childNodes.length,
-    isMobile,
-  );
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const radius = getSafeOrbitRadius(flowSize.width, flowSize.height, childNodes.length);
 
   const graph = useMemo(
     () => buildGraph(centerNode, childNodes, radius),
@@ -238,34 +240,44 @@ function FlowCanvasInner({
   }, [graph, setNodes, setEdges]);
 
   useEffect(() => {
-    if (nodes.length === 0) return;
+    if (nodes.length === 0 || flowSize.width <= 0 || flowSize.height <= 0) return;
 
     const timer = window.setTimeout(() => {
       void fitView({
         padding: PRODUCT_MAP_CANVAS_SAFE_PADDING_PX,
         duration: 280,
-        minZoom: 0.5,
-        maxZoom: 1.2,
+        minZoom: 0.55,
+        maxZoom: 1.25,
       });
     }, 120);
 
     return () => window.clearTimeout(timer);
-  }, [fitView, nodes, edges, centerNode.id, childNodes.length]);
+  }, [fitView, nodes, edges, centerNode.id, childNodes.length, flowSize.width, flowSize.height]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
-      if (node.id === CENTER_NODE_ID) {
-        if (canGoBack) onSelectCenter();
-        return;
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
       }
-      const selected = childNodes.find((c) => c.id === node.id);
-      if (selected) onSelectChild(selected);
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        if (node.id === CENTER_NODE_ID) {
+          onSelectCenter();
+          return;
+        }
+        const selected = childNodes.find((c) => c.id === node.id);
+        if (selected) onSelectChild(selected);
+      }, CLICK_DELAY_MS);
     },
-    [canGoBack, childNodes, onSelectCenter, onSelectChild],
+    [childNodes, onSelectCenter, onSelectChild],
   );
 
   const handleNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
       if (!onNodeDoubleClick) return;
       const nodeId = node.id === CENTER_NODE_ID ? centerNode.id : node.id;
       onNodeDoubleClick(nodeId);
@@ -289,10 +301,9 @@ function FlowCanvasInner({
 
   if (isLoading) {
     return (
-      <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+      <div className={`${PRODUCT_MAP_CANVAS_FRAME_CLASS} flex min-h-0 flex-1 flex-col`}>
         <div
-          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex items-center justify-center gap-4`}
-          style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex min-h-[500px] flex-1 items-center justify-center gap-4`}
         >
           <Skeleton className="h-32 w-32 rounded-full" />
           <Skeleton className="h-20 w-20 rounded-full" />
@@ -303,12 +314,11 @@ function FlowCanvasInner({
   }
 
   return (
-    <div className="flex w-full flex-col">
-      <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+    <div className="flex min-h-0 w-full flex-1 flex-col">
+      <div className={`${PRODUCT_MAP_CANVAS_FRAME_CLASS} flex min-h-0 flex-1 flex-col`}>
         <div
           ref={flowAreaRef}
-          className={PRODUCT_MAP_CANVAS_INNER_CLASS}
-          style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} relative h-full min-h-[500px] w-full flex-1`}
         >
           <ReactFlow
             nodes={nodes}
@@ -317,7 +327,7 @@ function FlowCanvasInner({
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             onNodeClick={handleNodeClick}
-            onNodeDoubleClick={onNodeDoubleClick ? handleNodeDoubleClick : undefined}
+            onNodeDoubleClick={handleNodeDoubleClick}
             onNodeContextMenu={canEdit ? handleNodeContextMenu : undefined}
             nodesDraggable={false}
             nodesConnectable={false}
@@ -341,8 +351,8 @@ function FlowCanvasInner({
           )}
         </div>
       </div>
-      <p className="mt-4 text-center text-xs text-[#717B99]">
-        Click para navegar · Doble click para detalles
+      <p className="mt-4 shrink-0 text-center text-xs text-[#717B99]">
+        Click para detalles · Doble click para navegar
         {canGoBack ? " · Esc o ← atrás" : ""}
       </p>
     </div>

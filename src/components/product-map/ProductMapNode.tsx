@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { FileText, Link2 } from "lucide-react";
 import {
@@ -45,6 +46,8 @@ const sizeClasses = {
   md: "h-20 w-20 text-xs sm:h-24 sm:w-24 sm:text-sm",
   lg: "h-28 w-28 text-sm sm:h-36 sm:w-36 sm:text-base",
 };
+
+const BUBBLE_CLICK_DELAY_MS = 250;
 
 function ProgressDonut({
   size,
@@ -209,6 +212,33 @@ export function ProductMapNodeBubble({
   const showRing =
     isCenter && calculatedProgress !== null && !dimmed;
   const tooltip = getNodeHoverTooltip(name, status, calculatedProgress);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleClick = useCallback(() => {
+    if (!onClick) return;
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = setTimeout(() => {
+      onClick();
+      clickTimerRef.current = null;
+    }, BUBBLE_CLICK_DELAY_MS);
+  }, [onClick]);
+
+  const handleDoubleClick = useCallback(() => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    onDoubleClick?.();
+  }, [onDoubleClick]);
 
   const inner = (
     <div className="relative flex items-center justify-center" style={{ width: px, height: px }}>
@@ -270,8 +300,8 @@ export function ProductMapNodeBubble({
       transition={{ duration: 0.35, delay: animationDelay, ease: [0.2, 0.8, 0.2, 1] }}
       whileHover={canEdit ? { scale: 1.06 } : undefined}
       whileTap={canEdit ? { scale: 0.96 } : undefined}
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
+      onClick={onClick ? handleClick : undefined}
+      onDoubleClick={onDoubleClick ? handleDoubleClick : undefined}
       onContextMenu={canEdit ? onContextMenu : undefined}
       title={canEdit ? undefined : "Solo lectura"}
       className={cn(

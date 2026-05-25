@@ -9,7 +9,8 @@ export const PRODUCT_MAP_CANVAS_FRAME_CLASS =
 export const PRODUCT_MAP_CANVAS_INNER_CLASS =
   "relative overflow-hidden rounded-xl bg-[radial-gradient(circle,rgba(0,0,0,0.04)_1px,transparent_1px)] bg-[length:20px_20px]";
 
-export const PRODUCT_MAP_CANVAS_SAFE_PADDING_PX = 80;
+/** Mindly orbit + fitView inset from canvas edges */
+export const PRODUCT_MAP_CANVAS_SAFE_PADDING_PX = 60;
 
 export const PRODUCT_MAP_PRESET_COLORS = [
   "#C6017F",

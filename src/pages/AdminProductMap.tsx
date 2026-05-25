@@ -203,10 +203,6 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
     [handleViewModeChange],
   );
 
-  const handleMindlyNodeDoubleClick = useCallback((nodeId: string) => {
-    setDetailNodeId(nodeId);
-  }, []);
-
   const isMac =
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad|iPod/.test(navigator.platform);
@@ -218,6 +214,17 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
       setFocusId(centerNode.parent_id);
     }
   }, [centerNode?.parent_id]);
+
+  const handleMindlyNodeDoubleClick = useCallback(
+    (nodeId: string) => {
+      if (centerNode && nodeId === centerNode.id) {
+        goBack();
+        return;
+      }
+      setFocusId(nodeId);
+    },
+    [centerNode, goBack],
+  );
 
   const resetToRoot = useCallback(() => {
     if (root?.id) {
@@ -670,7 +677,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex flex-1 flex-col"
+              className="flex min-h-0 flex-1 flex-col"
             >
               {isPageLoading ? (
                 <div className="flex flex-1 items-center justify-center p-12">
@@ -682,8 +689,8 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                     centerNode={centerNode}
                     childNodes={childNodes}
                     isLoading={isGraphLoading}
-                    onSelectChild={(node) => setFocusId(node.id)}
-                    onSelectCenter={goBack}
+                    onSelectChild={(node) => setDetailNodeId(node.id)}
+                    onSelectCenter={() => centerNode && setDetailNodeId(centerNode.id)}
                     canGoBack={canGoBack}
                     onAddChild={() => openCreateDialog(centerNode)}
                     onNodeContextMenu={handleNodeContextMenu}
