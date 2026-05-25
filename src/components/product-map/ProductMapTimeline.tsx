@@ -36,7 +36,10 @@ import {
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
 import { formatTargetDateLabel, TIME_HEALTH_CONFIG } from "@/lib/time-health";
-import { PRODUCT_MAP_BG } from "@/components/product-map/constants";
+import {
+  PRODUCT_MAP_CANVAS_FRAME_CLASS,
+  PRODUCT_MAP_CANVAS_INNER_CLASS,
+} from "@/components/product-map/constants";
 import type { ProductMapNodeWithProgress, TimeHealth } from "@/types/product-map";
 
 const INFO_COL_WIDTH = 320;
@@ -310,25 +313,21 @@ export function ProductMapTimeline({
           </p>
         </div>
       ) : (
-        <div
-          className="relative flex-1 overflow-x-auto rounded-xl border border-[#F2F2F2]"
-          style={{ backgroundColor: PRODUCT_MAP_BG }}
-        >
+        <div className={`${PRODUCT_MAP_CANVAS_FRAME_CLASS} overflow-x-auto pt-2`}>
           <div
-            className="relative"
+            className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} relative flex flex-col`}
             style={{ minWidth: INFO_COL_WIDTH + TRACK_WIDTH, width: INFO_COL_WIDTH + TRACK_WIDTH }}
           >
             <div
-              className="sticky top-0 z-20 grid border-b border-[#F2F2F2]"
+              className="sticky top-0 z-20 grid overflow-visible border-b border-[#F2F2F2] bg-white/90 pt-10 pb-2 backdrop-blur-sm"
               style={{
                 gridTemplateColumns: `${INFO_COL_WIDTH}px ${TRACK_WIDTH}px`,
-                backgroundColor: PRODUCT_MAP_BG,
               }}
             >
-              <div className="flex items-center px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[#717B99]">
+              <div className="flex items-end px-4 pb-1 text-xs font-semibold uppercase tracking-wide text-[#717B99]">
                 Nodo
               </div>
-              <div className="relative h-10 px-4">
+              <div className="relative h-10 overflow-visible px-4">
                 {months.map((month) => {
                   const left = dateToPercent(month, range.rangeStart, range.totalDays);
                   return (
@@ -342,21 +341,23 @@ export function ProductMapTimeline({
                   );
                 })}
                 {showTodayLine && (
-                  <span
-                    className="absolute -top-1 z-30 -translate-x-1/2 rounded-full bg-[#EF4444] px-2 py-0.5 text-[9px] font-bold uppercase text-white"
+                  <div
+                    className="absolute -top-7 z-30 -translate-x-1/2"
                     style={{ left: `${todayPct}%` }}
                   >
-                    HOY
-                  </span>
+                    <span className="rounded-full bg-[#EF4444] px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow-md">
+                      HOY
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="relative">
+            <div className="relative overflow-x-auto">
               {showTodayLine && (
                 <div
-                  className="pointer-events-none absolute bottom-0 top-0 z-10 w-0 border-l-2 border-dashed border-[#EF4444]"
-                  style={{ left: todayLineLeft }}
+                  className="pointer-events-none absolute bottom-0 z-10 w-0 border-l-2 border-dashed border-[#EF4444]"
+                  style={{ left: todayLineLeft, top: 4 }}
                 />
               )}
 

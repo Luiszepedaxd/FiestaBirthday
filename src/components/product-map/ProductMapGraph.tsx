@@ -9,7 +9,10 @@ import {
   getGraphNodeRadius,
 } from "@/lib/product-map-graph";
 import { getTimeHealthStroke } from "@/lib/time-health";
-import { PRODUCT_MAP_BG } from "./constants";
+import {
+  PRODUCT_MAP_CANVAS_FRAME_CLASS,
+  PRODUCT_MAP_CANVAS_INNER_CLASS,
+} from "./constants";
 import type { ProductMapNodeWithProgress } from "@/types/product-map";
 
 const DEFAULT_LINK_COLOR = "#D4CFC4";
@@ -179,38 +182,43 @@ export function ProductMapGraph({ nodes, isLoading, onNodeClick }: ProductMapGra
 
   if (isLoading) {
     return (
-      <div
-        className="flex items-center justify-center rounded-2xl border border-[#F2F2F2]"
-        style={{ minHeight: GRAPH_MIN_HEIGHT_PX }}
-      >
-        <Skeleton className="h-64 w-full max-w-2xl rounded-2xl" />
+      <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+        <div
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex items-center justify-center`}
+          style={{ minHeight: GRAPH_MIN_HEIGHT_PX }}
+        >
+          <Skeleton className="h-64 w-full max-w-2xl rounded-2xl" />
+        </div>
       </div>
     );
   }
 
   if (nodes.length === 0) {
     return (
-      <div
-        className="flex items-center justify-center rounded-2xl border border-dashed border-[#E5E5E5] p-12 text-sm text-[#717B99]"
-        style={{ minHeight: GRAPH_MIN_HEIGHT_PX }}
-      >
-        No hay nodos para mostrar en el grafo.
+      <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+        <div
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex items-center justify-center border-dashed p-12 text-sm text-[#717B99]`}
+          style={{ minHeight: GRAPH_MIN_HEIGHT_PX }}
+        >
+          No hay nodos para mostrar en el grafo.
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full overflow-hidden rounded-2xl border border-[#F2F2F2]"
-      style={{ minHeight: GRAPH_MIN_HEIGHT_PX, height: "min(70vh, 720px)" }}
-    >
-      <ForceGraph2D
-        ref={fgRef}
-        width={dimensions.width}
-        height={dimensions.height}
-        graphData={graphData}
-        backgroundColor={PRODUCT_MAP_BG}
+    <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+      <div
+        ref={containerRef}
+        className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} relative`}
+        style={{ minHeight: GRAPH_MIN_HEIGHT_PX, height: "min(70vh, 720px)" }}
+      >
+        <ForceGraph2D
+          ref={fgRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          graphData={graphData}
+          backgroundColor="transparent"
         autoPauseRedraw
         warmupTicks={50}
         cooldownTicks={100}
@@ -288,6 +296,7 @@ export function ProductMapGraph({ nodes, isLoading, onNodeClick }: ProductMapGra
         >
           <RotateCcw className="h-4 w-4" />
         </Button>
+      </div>
       </div>
     </div>
   );

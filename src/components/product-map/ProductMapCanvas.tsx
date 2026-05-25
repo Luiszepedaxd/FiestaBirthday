@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
-  Background,
   useNodesState,
   useEdgesState,
   type Node,
@@ -17,12 +16,17 @@ import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import type { ProductMapNodeWithProgress, ProductMapStatus, TimeHealth } from "@/types/product-map";
 import { ProductMapNodeBubble } from "./ProductMapNode";
-import { PRODUCT_MAP_BG } from "./constants";
+import {
+  PRODUCT_MAP_CANVAS_FRAME_CLASS,
+  PRODUCT_MAP_CANVAS_INNER_CLASS,
+  PRODUCT_MAP_CANVAS_SAFE_PADDING_PX,
+} from "./constants";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const CENTER_NODE_ID = "__center__";
 const CANVAS_HEIGHT_PX = 520;
+const ORBIT_RADIUS_FACTOR = 0.42;
 
 type FlowNodeData = {
   label: string;
@@ -80,11 +84,25 @@ const nodeTypes = {
   productMapBubble: ProductMapFlowNode,
 };
 
-function getRadialRadius(childCount: number, isMobile: boolean): number {
+function getPreferredRadialRadius(childCount: number, isMobile: boolean): number {
   const base = isMobile ? 130 : 200;
   if (childCount <= 6) return base;
   if (childCount <= 12) return base + 50;
   return base + 90;
+}
+
+function getSafeOrbitRadius(
+  containerWidth: number,
+  containerHeight: number,
+  childCount: number,
+  isMobile: boolean,
+): number {
+  const usableW = Math.max(0, containerWidth - PRODUCT_MAP_CANVAS_SAFE_PADDING_PX * 2);
+  const usableH = Math.max(0, containerHeight - PRODUCT_MAP_CANVAS_SAFE_PADDING_PX * 2);
+  const maxFromContainer = Math.min(usableW, usableH) * ORBIT_RADIUS_FACTOR;
+  const preferred = getPreferredRadialRadius(childCount, isMobile);
+  if (maxFromContainer <= 0) return preferred;
+  return Math.min(preferred, maxFromContainer);
 }
 
 function buildGraph(
@@ -179,8 +197,31 @@ function FlowCanvasInner({
   canEdit = true,
 }: FlowCanvasInnerProps) {
   const { fitView } = useReactFlow();
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-  const radius = getRadialRadius(childNodes.length, isMobile);
+  const flowAreaRef = useRef<HTMLDivElement>(null);
+  const [flowSize, setFlowSize] = useState({ width: 800, height: CANVAS_HEIGHT_PX });
+
+  useEffect(() => {
+    const el = flowAreaRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      const rect = el.getBoundingClientRect();
+      setFlowSize({ width: rect.width, height: rect.height });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const isMobile = flowSize.width < 640;
+  const radius = getSafeOrbitRadius(
+    flowSize.width,
+    flowSize.height,
+    childNodes.length,
+    isMobile,
+  );
 
   const graph = useMemo(
     () => buildGraph(centerNode, childNodes, radius),
@@ -199,7 +240,12 @@ function FlowCanvasInner({
     if (nodes.length === 0) return;
 
     const timer = window.setTimeout(() => {
-      void fitView({ padding: 0.35, duration: 280, minZoom: 0.5, maxZoom: 1.2 });
+      void fitView({
+        padding: PRODUCT_MAP_CANVAS_SAFE_PADDING_PX,
+        duration: 280,
+        minZoom: 0.5,
+        maxZoom: 1.2,
+      });
     }, 120);
 
     return () => window.clearTimeout(timer);
@@ -242,69 +288,73 @@ function FlowCanvasInner({
 
   if (isLoading) {
     return (
-      <div
-        className="flex items-center justify-center gap-4 p-8"
-        style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
-      >
-        <Skeleton className="h-32 w-32 rounded-full" />
-        <Skeleton className="h-20 w-20 rounded-full" />
-        <Skeleton className="h-20 w-20 rounded-full" />
+      <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+        <div
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex items-center justify-center gap-4`}
+          style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
+        >
+          <Skeleton className="h-32 w-32 rounded-full" />
+          <Skeleton className="h-20 w-20 rounded-full" />
+          <Skeleton className="h-20 w-20 rounded-full" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      className="relative w-full overflow-hidden rounded-2xl"
-      style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
-    >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        onNodeClick={handleNodeClick}
-        onNodeDoubleClick={onNodeDoubleClick ? handleNodeDoubleClick : undefined}
-        onNodeContextMenu={canEdit ? handleNodeContextMenu : undefined}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable
-        panOnDrag
-        zoomOnScroll
-        zoomOnPinch
-        minZoom={0.35}
-        maxZoom={1.5}
-        proOptions={{ hideAttribution: true }}
-        style={{ width: "100%", height: "100%", background: PRODUCT_MAP_BG }}
-      >
-        <Background color="#E5E5E5" gap={24} size={1} />
-      </ReactFlow>
-
-      {childNodes.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+    <div className="flex w-full flex-col">
+      <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+        <div
+          ref={flowAreaRef}
+          className={PRODUCT_MAP_CANVAS_INNER_CLASS}
+          style={{ width: "100%", height: CANVAS_HEIGHT_PX }}
         >
-          <div className="pointer-events-auto flex flex-col items-center gap-3 rounded-2xl border border-dashed border-[#E5E5E5] bg-white/80 px-6 py-5 text-center shadow-sm backdrop-blur-sm">
-            <p className="text-sm text-[#717B99]">Este nodo aún no tiene ramas</p>
-            {canEdit && (
-              <Button
-                type="button"
-                size="lg"
-                onClick={onAddChild}
-                className="h-14 w-14 rounded-full bg-[#C6017F] p-0 hover:bg-[#B10072]"
-                aria-label="Agregar primer hijo"
-              >
-                <Plus className="h-8 w-8" />
-              </Button>
-            )}
-          </div>
-        </motion.div>
-      )}
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeTypes={nodeTypes}
+            onNodeClick={handleNodeClick}
+            onNodeDoubleClick={onNodeDoubleClick ? handleNodeDoubleClick : undefined}
+            onNodeContextMenu={canEdit ? handleNodeContextMenu : undefined}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable
+            panOnDrag
+            zoomOnScroll
+            zoomOnPinch
+            minZoom={0.35}
+            maxZoom={1.5}
+            proOptions={{ hideAttribution: true }}
+            style={{ width: "100%", height: "100%", background: "transparent" }}
+          />
 
-      <p className="pointer-events-none absolute bottom-3 left-0 right-0 z-10 text-center text-xs text-[#717B99]">
+          {childNodes.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            >
+              <div className="pointer-events-auto flex flex-col items-center gap-3 rounded-2xl border border-dashed border-[#E5E5E5] bg-white/80 px-6 py-5 text-center shadow-sm backdrop-blur-sm">
+                <p className="text-sm text-[#717B99]">Este nodo aún no tiene ramas</p>
+                {canEdit && (
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={onAddChild}
+                    className="h-14 w-14 rounded-full bg-[#C6017F] p-0 hover:bg-[#B10072]"
+                    aria-label="Agregar primer hijo"
+                  >
+                    <Plus className="h-8 w-8" />
+                  </Button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </div>
+      <p className="mt-4 text-center text-xs text-[#717B99]">
         Click para navegar · Doble click para detalles
         {canGoBack ? " · Esc o ← atrás" : ""}
       </p>

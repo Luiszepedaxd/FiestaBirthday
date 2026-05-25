@@ -3,7 +3,6 @@ import dagre from "dagre";
 import {
   ReactFlow,
   ReactFlowProvider,
-  Background,
   Controls,
   MiniMap,
   useNodesState,
@@ -18,7 +17,7 @@ import { Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProductMapNodeWithProgress } from "@/types/product-map";
-import { PRODUCT_MAP_BG } from "./constants";
+import { PRODUCT_MAP_CANVAS_FRAME_CLASS, PRODUCT_MAP_CANVAS_INNER_CLASS } from "./constants";
 import {
   PanoramicNode,
   formatPanoramicLabel,
@@ -156,21 +155,24 @@ function PanoramicCanvasInner({
 
   if (isLoading) {
     return (
-      <div
-        className="flex items-center justify-center p-12"
-        style={{ minHeight: CANVAS_MIN_HEIGHT_PX }}
-      >
-        <Skeleton className="h-64 w-full max-w-2xl rounded-2xl" />
+      <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+        <div
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex items-center justify-center p-12`}
+          style={{ minHeight: CANVAS_MIN_HEIGHT_PX }}
+        >
+          <Skeleton className="h-64 w-full max-w-2xl rounded-2xl" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      className="relative w-full overflow-hidden rounded-2xl border border-[#F2F2F2]"
-      style={{ minHeight: CANVAS_MIN_HEIGHT_PX, height: "min(70vh, 720px)" }}
-    >
-      <ReactFlow
+    <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
+      <div
+        className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} relative`}
+        style={{ minHeight: CANVAS_MIN_HEIGHT_PX, height: "min(70vh, 720px)" }}
+      >
+        <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -187,10 +189,9 @@ function PanoramicCanvasInner({
         minZoom={0.1}
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
-        style={{ width: "100%", height: "100%", background: PRODUCT_MAP_BG }}
-      >
-        <Background color="#E5E5E5" gap={24} size={1} />
-        <Controls
+          style={{ width: "100%", height: "100%", background: "transparent" }}
+        >
+          <Controls
           showInteractive={false}
           className="!rounded-xl !border-[#E5E5E5] !bg-white !shadow-sm"
         />
@@ -207,18 +208,19 @@ function PanoramicCanvasInner({
           className="!rounded-xl !border-[#E5E5E5] !bg-white/90"
           maskColor="rgba(250, 248, 245, 0.75)"
         />
-      </ReactFlow>
+        </ReactFlow>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-xl border-[#E5E5E5] bg-white shadow-sm"
-        onClick={() => void fitView({ padding: 0.2, duration: 300 })}
-        aria-label="Ajustar vista"
-      >
-        <Maximize2 className="h-4 w-4" />
-      </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-xl border-[#E5E5E5] bg-white shadow-sm"
+          onClick={() => void fitView({ padding: 0.2, duration: 300 })}
+          aria-label="Ajustar vista"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
