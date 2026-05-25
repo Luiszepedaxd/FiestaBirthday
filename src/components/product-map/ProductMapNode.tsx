@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { FileText } from "lucide-react";
+import { FileText, Link2 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +30,7 @@ type ProductMapNodeBubbleProps = {
   animationDelay?: number;
   variant?: "default" | "flow";
   hasNotes?: boolean;
+  clickUpLinksCount?: number;
   timeHealth?: TimeHealth;
 };
 
@@ -117,6 +118,7 @@ function BubbleContent({
   dimmed,
   childrenCount,
   hasNotes,
+  clickUpLinksCount = 0,
 }: {
   name: string;
   status: ProductMapStatus;
@@ -127,6 +129,7 @@ function BubbleContent({
   dimmed: boolean;
   childrenCount?: number;
   hasNotes?: boolean;
+  clickUpLinksCount?: number;
 }) {
   const isParent = (childrenCount ?? 0) > 0;
   const displayColor = dimmed
@@ -159,6 +162,13 @@ function BubbleContent({
           {calculatedProgress}%
         </span>
       )}
+      {clickUpLinksCount > 0 && (
+        <Link2
+          className="absolute right-1.5 top-1.5 text-white opacity-70"
+          size={11}
+          aria-hidden
+        />
+      )}
       {hasNotes && (
         <FileText
           className="absolute bottom-1.5 right-1.5 text-white opacity-70"
@@ -185,6 +195,7 @@ export function ProductMapNodeBubble({
   animationDelay = 0,
   variant = "default",
   hasNotes = false,
+  clickUpLinksCount = 0,
   timeHealth,
 }: ProductMapNodeBubbleProps) {
   const dimmed = isVisuallyUntracked(calculatedProgress) || status === "untracked";
@@ -215,9 +226,15 @@ export function ProductMapNodeBubble({
         dimmed={dimmed}
         childrenCount={childrenCount}
         hasNotes={hasNotes}
+        clickUpLinksCount={clickUpLinksCount}
       />
     </div>
   );
+
+  const clickUpTooltip =
+    clickUpLinksCount > 0
+      ? `${clickUpLinksCount} task${clickUpLinksCount === 1 ? "" : "s"} de ClickUp ligadas`
+      : null;
 
   const wrapped = (
     <TooltipProvider delayDuration={200}>
@@ -226,7 +243,12 @@ export function ProductMapNodeBubble({
           <div className="inline-flex">{inner}</div>
         </TooltipTrigger>
         <TooltipContent side="top" className="rounded-lg border-[#E5E5E5] bg-white text-[#2E2D2C]">
-          {tooltip}
+          <div className="space-y-0.5">
+            <p>{tooltip}</p>
+            {clickUpTooltip && (
+              <p className="text-xs text-[#7B68EE]">{clickUpTooltip}</p>
+            )}
+          </div>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

@@ -36,6 +36,7 @@ type FlowNodeData = {
   animationDelay: number;
   childrenCount: number;
   hasNotes: boolean;
+  clickUpLinksCount: number;
   timeHealth: TimeHealth;
 };
 
@@ -69,6 +70,7 @@ function ProductMapFlowNode({ data }: NodeProps<ProductMapFlowNodeType>) {
         animationDelay={data.animationDelay ?? 0}
         variant="flow"
         hasNotes={data.hasNotes}
+        clickUpLinksCount={data.clickUpLinksCount}
         timeHealth={data.timeHealth}
       />
       <Handle
@@ -126,6 +128,7 @@ function buildGraph(
         animationDelay: 0,
         childrenCount: centerNode.children_count,
         hasNotes: centerNode.has_notes,
+        clickUpLinksCount: centerNode.clickup_links_count ?? 0,
         timeHealth: centerNode.time_health,
       },
       draggable: false,
@@ -153,6 +156,7 @@ function buildGraph(
         animationDelay: 0.05 + index * 0.04,
         childrenCount: child.children_count,
         hasNotes: child.has_notes,
+        clickUpLinksCount: child.clickup_links_count ?? 0,
         timeHealth: child.time_health,
       },
       draggable: false,

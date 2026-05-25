@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Link2 } from "lucide-react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   Tooltip,
@@ -25,6 +26,7 @@ export type PanoramicNodeData = {
   calculatedProgress: number | null;
   childrenCount: number;
   hasNotes: boolean;
+  clickUpLinksCount: number;
   timeHealth: TimeHealth;
 };
 
@@ -77,8 +79,16 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
               position={Position.Top}
               className="!pointer-events-none !h-0 !w-0 !min-h-0 !min-w-0 !border-0 !opacity-0"
             />
-            <span className="line-clamp-2 w-full text-center text-[11px] font-semibold leading-tight text-[#2E2D2C]">
-              {data.label}
+            <span className="flex w-full items-center justify-center gap-1 px-0.5">
+              {data.clickUpLinksCount > 0 && (
+                <Link2
+                  className="h-3 w-3 shrink-0 text-[#7B68EE]"
+                  aria-hidden
+                />
+              )}
+              <span className="line-clamp-2 min-w-0 flex-1 text-center text-[11px] font-semibold leading-tight text-[#2E2D2C]">
+                {data.label}
+              </span>
             </span>
             <Handle
               type="source"
@@ -91,7 +101,15 @@ function PanoramicNodeComponent({ data }: NodeProps<{ type: "panoramic"; data: P
           side="top"
           className="max-w-xs rounded-lg border-[#E5E5E5] bg-white text-[#2E2D2C]"
         >
-          {tooltip}
+          <div className="space-y-0.5">
+            <p>{tooltip}</p>
+            {data.clickUpLinksCount > 0 && (
+              <p className="text-xs text-[#7B68EE]">
+                {data.clickUpLinksCount} task
+                {data.clickUpLinksCount === 1 ? "" : "s"} de ClickUp ligadas
+              </p>
+            )}
+          </div>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

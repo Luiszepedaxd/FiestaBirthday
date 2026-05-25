@@ -28,12 +28,23 @@ export interface ProductMapNode {
   notes_updated_at: string | null;
 }
 
+export interface ClickUpLink {
+  id: string;
+  node_id: string;
+  clickup_url: string;
+  task_id: string | null;
+  task_name: string | null;
+  position: number;
+  created_at: string;
+}
+
 export interface ProductMapNodeWithProgress extends ProductMapNode {
   calculated_progress: number | null;
   children_count: number;
   untracked_children_count: number;
   time_health: TimeHealth;
   has_notes: boolean;
+  clickup_links_count: number;
 }
 
 export type CreateProductMapNodeInput = {

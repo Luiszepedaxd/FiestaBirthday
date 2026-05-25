@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
 import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CLICKUP_BRAND_COLOR } from "@/lib/clickup-utils";
 import { getTimeHealthStroke } from "@/lib/time-health";
 import {
   PRODUCT_MAP_CANVAS_FRAME_CLASS,
@@ -100,6 +101,20 @@ function ProductMapGraph2D({ nodes, onNodeClick }: ProductMapGraph2DProps) {
         ctx.fillStyle = "#FFFFFF";
         ctx.fill();
         ctx.strokeStyle = "rgba(46, 45, 44, 0.35)";
+        ctx.lineWidth = 0.75 / globalScale;
+        ctx.stroke();
+      }
+
+      const clickUpCount = node.raw.clickup_links_count ?? 0;
+      if (clickUpCount > 0) {
+        const dotR = Math.max(2.2 / globalScale, 1.3);
+        const dotX = node.x - radius * 0.65;
+        const dotY = node.y - radius * 0.65;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotR, 0, 2 * Math.PI);
+        ctx.fillStyle = CLICKUP_BRAND_COLOR;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
         ctx.lineWidth = 0.75 / globalScale;
         ctx.stroke();
       }

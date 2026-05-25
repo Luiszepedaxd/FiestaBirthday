@@ -15,7 +15,7 @@ import type {
 const NODE_VIEW = "product_map_nodes_with_progress";
 
 export const PRODUCT_MAP_NODE_VIEW_COLUMNS =
-  "id, name, parent_id, color, position, description, status, created_at, updated_at, created_by, notes, notes_plain_text, target_date, notes_updated_at, calculated_progress, children_count, untracked_children_count, time_health, has_notes";
+  "id, name, parent_id, color, position, description, status, created_at, updated_at, created_by, notes, notes_plain_text, target_date, notes_updated_at, calculated_progress, children_count, untracked_children_count, time_health, has_notes, clickup_links_count";
 
 const NODE_VIEW_COLUMNS = PRODUCT_MAP_NODE_VIEW_COLUMNS;
 

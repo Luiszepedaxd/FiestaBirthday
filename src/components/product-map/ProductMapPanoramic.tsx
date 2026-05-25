@@ -84,6 +84,7 @@ function buildPanoramicGraph(allNodes: ProductMapNodeWithProgress[]): {
       calculatedProgress: n.calculated_progress,
       childrenCount: n.children_count,
       hasNotes: n.has_notes,
+      clickUpLinksCount: n.clickup_links_count ?? 0,
       timeHealth: n.time_health,
     },
     draggable: false,

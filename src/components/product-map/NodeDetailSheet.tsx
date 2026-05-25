@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import type { JSONContent } from "@tiptap/react";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ExternalLink, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -16,13 +16,23 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AddClickUpLinkDialog } from "@/components/product-map/AddClickUpLinkDialog";
+import { EditClickUpLinkDialog } from "@/components/product-map/EditClickUpLinkDialog";
 import { NodeNotesEditor } from "@/components/product-map/NodeNotesEditor";
+import {
+  useClickUpLinks,
+  useDeleteClickUpLink,
+} from "@/hooks/useProductMapClickup";
 import {
   useNodePath,
   useProductMapNode,
   useUpdateNodeNotes,
   useUpdateNodeTargetDate,
 } from "@/hooks/useProductMap";
+import {
+  CLICKUP_BRAND_COLOR,
+  formatTaskDisplayName,
+} from "@/lib/clickup-utils";
 import {
   getCenterNodeAccentColor,
   getStatusLabel,
@@ -33,7 +43,7 @@ import {
   formatTargetDateLabel,
   TIME_HEALTH_CONFIG,
 } from "@/lib/time-health";
-import type { ProductMapNodeWithProgress } from "@/types/product-map";
+import type { ClickUpLink, ProductMapNodeWithProgress } from "@/types/product-map";
 
 export type NodeDetailSheetProps = {
   open: boolean;
@@ -58,7 +68,14 @@ export function NodeDetailSheet({
   const { data: path = [], isLoading: pathLoading } = useNodePath(open ? nodeId : null);
   const updateNotes = useUpdateNodeNotes();
   const updateTargetDate = useUpdateNodeTargetDate();
+  const { data: clickUpLinks = [], isLoading: clickUpLinksLoading } = useClickUpLinks(
+    open ? nodeId : null,
+  );
+  const deleteClickUpLink = useDeleteClickUpLink();
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [addClickUpOpen, setAddClickUpOpen] = useState(false);
+  const [editClickUpLink, setEditClickUpLink] = useState<ClickUpLink | null>(null);
+  const clickUpSectionRef = useRef<HTMLElement>(null);
 
   const directChildrenCount = useMemo(() => {
     if (!nodeId) return 0;
@@ -75,6 +92,9 @@ export function NodeDetailSheet({
   const healthConfig = TIME_HEALTH_CONFIG[timeHealth];
   const HealthIcon = healthConfig.icon;
   const hasNotesContent = Boolean(node?.has_notes || node?.notes_plain_text?.trim());
+  const clickUpCount = node?.clickup_links_count ?? clickUpLinks.length;
+  const showClickUpSection =
+    clickUpLinks.length > 0 || clickUpLinksLoading || (canEdit && Boolean(nodeId));
   const targetDateParsed = node?.target_date ? parseISO(node.target_date) : undefined;
 
   const createdLabel = node?.created_at
@@ -108,6 +128,20 @@ export function NodeDetailSheet({
     updateTargetDate.mutate({ nodeId, targetDate: null });
   }, [canEdit, nodeId, updateTargetDate]);
 
+  const scrollToClickUpSection = useCallback(() => {
+    clickUpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const handleDeleteClickUpLink = useCallback(
+    (link: ClickUpLink) => {
+      if (!canEdit) return;
+      const confirmed = window.confirm("¿Desligar esta task de ClickUp del nodo?");
+      if (!confirmed) return;
+      deleteClickUpLink.mutate(link);
+    },
+    [canEdit, deleteClickUpLink],
+  );
+
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent
@@ -140,6 +174,17 @@ export function NodeDetailSheet({
                 >
                   {getStatusLabel(node.status)}
                 </Badge>
+                {clickUpCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={scrollToClickUpSection}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#7B68EE]/30 bg-[#7B68EE]/10 px-2 py-0.5 text-xs font-medium text-[#7B68EE] transition-colors hover:bg-[#7B68EE]/20"
+                    title={`${clickUpCount} task${clickUpCount === 1 ? "" : "s"} de ClickUp ligadas`}
+                  >
+                    <Link2 className="h-3 w-3" aria-hidden />
+                    {clickUpCount} task{clickUpCount === 1 ? "" : "s"}
+                  </button>
+                )}
               </div>
             </SheetHeader>
 
@@ -264,6 +309,114 @@ export function NodeDetailSheet({
                 </div>
               )}
             </section>
+
+            {showClickUpSection && (
+              <section ref={clickUpSectionRef} className="mt-6 space-y-3">
+                {clickUpLinks.length > 0 && (
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-[#2E2D2C]">
+                      Tasks de ClickUp
+                      <span className="ml-1.5 font-normal text-[#717B99]">
+                        ({clickUpLinks.length})
+                      </span>
+                    </h3>
+                  </div>
+                )}
+
+                {clickUpLinksLoading ? (
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                ) : clickUpLinks.length > 0 ? (
+                  <ul className="space-y-2">
+                    {clickUpLinks.map((link) => (
+                      <li
+                        key={link.id}
+                        className="group flex flex-wrap items-center gap-2 rounded-xl border border-[#F2F2F2] bg-[#FAF8F5] px-3 py-2"
+                      >
+                        <ExternalLink
+                          className="h-4 w-4 shrink-0"
+                          style={{ color: CLICKUP_BRAND_COLOR }}
+                          aria-hidden
+                        />
+                        <a
+                          href={link.clickup_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-w-0 flex-1 text-sm font-medium text-[#2E2D2C] underline-offset-2 hover:underline"
+                          style={{ color: CLICKUP_BRAND_COLOR }}
+                        >
+                          {formatTaskDisplayName(link)}
+                        </a>
+                        {link.task_id && (
+                          <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
+                            {link.task_id}
+                          </Badge>
+                        )}
+                        {canEdit && (
+                          <>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 shrink-0 opacity-70 group-hover:opacity-100"
+                              onClick={() => setEditClickUpLink(link)}
+                              aria-label="Editar alias"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 shrink-0 text-[#717B99] opacity-70 hover:text-destructive group-hover:opacity-100"
+                              onClick={() => handleDeleteClickUpLink(link)}
+                              disabled={deleteClickUpLink.isPending}
+                              aria-label="Desligar task"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {canEdit && nodeId && (
+                  <div className="space-y-1.5">
+                    {clickUpLinks.length === 0 && (
+                      <p className="text-xs text-[#717B99]">
+                        Liga este nodo a tasks de ClickUp
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-[#7B68EE]/40 text-[#7B68EE] hover:bg-[#7B68EE]/10"
+                      onClick={() => setAddClickUpOpen(true)}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Agregar task de ClickUp
+                    </Button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {nodeId && (
+              <>
+                <AddClickUpLinkDialog
+                  open={addClickUpOpen}
+                  onOpenChange={setAddClickUpOpen}
+                  nodeId={nodeId}
+                />
+                <EditClickUpLinkDialog
+                  open={editClickUpLink !== null}
+                  onOpenChange={(next) => !next && setEditClickUpLink(null)}
+                  link={editClickUpLink}
+                />
+              </>
+            )}
 
             <section className="mt-6 space-y-3">
               <div className="flex items-center justify-between gap-2">
