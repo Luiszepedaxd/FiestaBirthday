@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { formatDistanceToNow, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import {
   ArrowLeft,
+  CalendarDays,
   CircleDot,
   Eye,
   GitBranch,
@@ -38,6 +41,7 @@ import { ProductMapSearch } from "@/components/product-map/ProductMapSearch";
 import { ProductMapGraph } from "@/components/product-map/ProductMapGraph";
 import { NodeDetailSheet } from "@/components/product-map/NodeDetailSheet";
 import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
+import { ProductMapTimeline } from "@/components/product-map/ProductMapTimeline";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
 import { NodeEditDialog } from "@/components/product-map/NodeEditDialog";
 import { DeleteNodeDialog } from "@/components/product-map/DeleteNodeDialog";
@@ -47,6 +51,10 @@ import {
   setStoredProductMapViewMode,
   type ProductMapViewMode,
 } from "@/lib/product-map-view-mode";
+import {
+  computeTimelineHeaderStats,
+  getMilestoneNodes,
+} from "@/lib/product-map-timeline";
 import type { ProductMapNodeWithProgress, ProductMapStatus } from "@/types/product-map";
 
 type EditMode = "create" | "edit" | null;
@@ -320,6 +328,25 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
   const rootBarColor = root ? getCenterNodeAccentColor(root) : "#9CA3AF";
   const isDetailOpen = detailNodeId !== null;
 
+  const isWideView =
+    viewMode === "panoramic" || viewMode === "graph" || viewMode === "timeline";
+
+  const timelineMilestones = useMemo(
+    () => getMilestoneNodes(allPanoramicNodes),
+    [allPanoramicNodes],
+  );
+  const timelineStats = useMemo(
+    () => computeTimelineHeaderStats(timelineMilestones),
+    [timelineMilestones],
+  );
+
+  const handleGoToRootInMindly = useCallback(() => {
+    if (root?.id) {
+      setFocusId(root.id);
+      handleViewModeChange("mindly");
+    }
+  }, [root?.id, handleViewModeChange]);
+
   if (mode === "admin" && !adminLoading && !isAdmin) {
     return null;
   }
@@ -331,7 +358,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
     >
       <header className="sticky top-0 z-40 border-b border-[#F2F2F2] bg-white/95 backdrop-blur-sm">
         <div
-          className={`mx-auto w-full px-4 py-3 ${viewMode === "panoramic" || viewMode === "graph" ? "max-w-[1600px]" : "max-w-5xl"}`}
+          className={`mx-auto w-full px-4 py-3 ${isWideView ? "max-w-[1600px]" : "max-w-5xl"}`}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -353,7 +380,12 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                 size="sm"
                 value={viewMode}
                 onValueChange={(value) => {
-                  if (value === "mindly" || value === "panoramic" || value === "graph") {
+                  if (
+                    value === "mindly" ||
+                    value === "panoramic" ||
+                    value === "graph" ||
+                    value === "timeline"
+                  ) {
                     handleViewModeChange(value);
                   }
                 }}
@@ -383,6 +415,14 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                 >
                   <Network className="mr-1.5 h-4 w-4" />
                   Grafo
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="timeline"
+                  className="rounded-lg px-3 data-[state=on]:bg-[#FFF0F9] data-[state=on]:text-[#C6017F]"
+                  aria-label="Vista Timeline"
+                >
+                  <CalendarDays className="mr-1.5 h-4 w-4" />
+                  Timeline
                 </ToggleGroupItem>
               </ToggleGroup>
               <Button
@@ -465,7 +505,41 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
           </div>
 
           <div className="mt-3 rounded-xl border border-[#F2F2F2] bg-[#FAF8F5] px-4 py-3">
-            {viewMode === "graph" ? (
+            {viewMode === "timeline" ? (
+              allNodesLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-[#2E2D2C]">
+                      Timeline · {timelineStats.totalMilestones} hito
+                      {timelineStats.totalMilestones === 1 ? "" : "s"}
+                      {timelineStats.closestName && timelineStats.closestTargetDate ? (
+                        <>
+                          {" "}
+                          · El más cercano: {timelineStats.closestName} en{" "}
+                          {formatDistanceToNow(parseISO(timelineStats.closestTargetDate), {
+                            addSuffix: true,
+                            locale: es,
+                          })}
+                        </>
+                      ) : null}
+                    </p>
+                    {timelineStats.overdueCount > 0 && (
+                      <span className="rounded-full bg-[#FEE2E2] px-2.5 py-0.5 text-xs font-semibold text-[#EF4444]">
+                        {timelineStats.overdueCount} atrasado
+                        {timelineStats.overdueCount === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    {timelineStats.atRiskCount > 0 && (
+                      <span className="rounded-full bg-[#FEF3C7] px-2.5 py-0.5 text-xs font-semibold text-[#D97706]">
+                        {timelineStats.atRiskCount} en riesgo
+                      </span>
+                    )}
+                  </div>
+                </>
+              )
+            ) : viewMode === "graph" ? (
               allNodesLoading ? (
                 <Skeleton className="h-10 w-full" />
               ) : (
@@ -515,7 +589,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
         <div className="border-b border-[#F2F2F2] bg-[#FFF9F0] px-4 py-2">
           <div
             className={`mx-auto flex items-center gap-2 text-xs text-[#717B99] ${
-              viewMode === "panoramic" || viewMode === "graph" ? "max-w-[1600px]" : "max-w-5xl"
+              isWideView ? "max-w-[1600px]" : "max-w-5xl"
             }`}
           >
             <Eye className="h-3.5 w-3.5 shrink-0 text-[#C6017F]" aria-hidden />
@@ -529,7 +603,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
 
       <main
         className={`mx-auto flex min-h-0 w-full flex-1 flex-col px-2 py-4 sm:px-4 ${
-          viewMode === "panoramic" || viewMode === "graph" ? "max-w-[1600px]" : "max-w-5xl"
+          isWideView ? "max-w-[1600px]" : "max-w-5xl"
         }`}
       >
         <AnimatePresence mode="wait">
@@ -598,6 +672,24 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                 nodes={allPanoramicNodes}
                 isLoading={allNodesLoading}
                 onNodeClick={(node) => setDetailNodeId(node.id)}
+              />
+            </motion.div>
+          )}
+          {viewMode === "timeline" && (
+            <motion.div
+              key="timeline"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-1 flex-col"
+            >
+              <ProductMapTimeline
+                nodes={allPanoramicNodes}
+                rootId={root?.id}
+                isLoading={allNodesLoading}
+                onNodeClick={handleOpenNodeDetail}
+                onGoToRoot={handleGoToRootInMindly}
               />
             </motion.div>
           )}
