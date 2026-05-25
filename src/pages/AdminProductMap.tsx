@@ -734,6 +734,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                   isLoading={allNodesLoading}
                   dimension={graphDimension}
                   onNodeClick={(node) => setDetailNodeId(node.id)}
+                  onSwitchTo2D={() => handleGraphDimensionChange("2d")}
                 />
               </Suspense>
             </motion.div>

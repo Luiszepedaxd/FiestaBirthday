@@ -17,6 +17,7 @@ export type ProductMapGraphProps = {
   isLoading: boolean;
   dimension: ProductMapGraphDimension;
   onNodeClick: (node: ProductMapNodeWithProgress) => void;
+  onSwitchTo2D?: () => void;
 };
 
 function GraphViewFallback() {
@@ -37,6 +38,7 @@ export function ProductMapGraph({
   isLoading,
   dimension,
   onNodeClick,
+  onSwitchTo2D,
 }: ProductMapGraphProps) {
   if (isLoading) {
     return (
@@ -68,7 +70,12 @@ export function ProductMapGraph({
 
   return (
     <Suspense fallback={<GraphViewFallback />}>
-      <GraphView nodes={nodes} onNodeClick={onNodeClick} />
+      <GraphView
+        key={dimension}
+        nodes={nodes}
+        onNodeClick={onNodeClick}
+        onSwitchTo2D={dimension === "3d" ? onSwitchTo2D : undefined}
+      />
     </Suspense>
   );
 }

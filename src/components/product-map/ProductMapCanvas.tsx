@@ -12,8 +12,6 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Plus } from "lucide-react";
-import { motion } from "framer-motion";
 import type { ProductMapNodeWithProgress, ProductMapStatus, TimeHealth } from "@/types/product-map";
 import { ProductMapNodeBubble } from "./ProductMapNode";
 import {
@@ -21,7 +19,6 @@ import {
   PRODUCT_MAP_CANVAS_INNER_CLASS,
   PRODUCT_MAP_CANVAS_SAFE_PADDING_PX,
 } from "./constants";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const CENTER_NODE_ID = "__center__";
@@ -195,7 +192,7 @@ function FlowCanvasInner({
   onSelectChild,
   onSelectCenter,
   canGoBack,
-  onAddChild,
+  onAddChild: _onAddChild,
   onNodeContextMenu,
   onNodeDoubleClick,
   canEdit = true,
@@ -335,26 +332,12 @@ function FlowCanvasInner({
           />
 
           {childNodes.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            <p
+              className="pointer-events-none absolute bottom-6 left-0 right-0 z-10 text-center text-xs text-muted-foreground"
+              style={{ fontSize: 12, opacity: 0.6 }}
             >
-              <div className="pointer-events-auto flex flex-col items-center gap-3 rounded-2xl border border-dashed border-[#E5E5E5] bg-white/80 px-6 py-5 text-center shadow-sm backdrop-blur-sm">
-                <p className="text-sm text-[#717B99]">Este nodo aún no tiene ramas</p>
-                {canEdit && (
-                  <Button
-                    type="button"
-                    size="lg"
-                    onClick={onAddChild}
-                    className="h-14 w-14 rounded-full bg-[#C6017F] p-0 hover:bg-[#B10072]"
-                    aria-label="Agregar primer hijo"
-                  >
-                    <Plus className="h-8 w-8" />
-                  </Button>
-                )}
-              </div>
-            </motion.div>
+              Esta es una pantalla final
+            </p>
           )}
         </div>
       </div>

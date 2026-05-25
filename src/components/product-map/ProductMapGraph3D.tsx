@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, type ErrorInfo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D, { type ForceGraphMethods } from "react-force-graph-3d";
+import * as THREE from "three";
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getGraph3DNodeColor, getGraph3DNodeVal } from "@/lib/product-map-graph";
 import {
+  PRODUCT_MAP_BG,
   PRODUCT_MAP_CANVAS_FRAME_CLASS,
   PRODUCT_MAP_CANVAS_INNER_CLASS,
 } from "./constants";
@@ -14,37 +16,90 @@ import {
 } from "./product-map-graph-data";
 import type { ProductMapNodeWithProgress } from "@/types/product-map";
 
+void THREE;
+
 const GRAPH_MIN_HEIGHT_PX = 560;
 
 export type ProductMapGraph3DProps = {
   nodes: ProductMapNodeWithProgress[];
   onNodeClick: (node: ProductMapNodeWithProgress) => void;
+  onSwitchTo2D?: () => void;
 };
 
-function ProductMapGraph3D({ nodes, onNodeClick }: ProductMapGraph3DProps) {
+type Graph3DErrorBoundaryProps = {
+  children: ReactNode;
+  onSwitchTo2D?: () => void;
+};
+
+type Graph3DErrorBoundaryState = {
+  hasError: boolean;
+};
+
+class Graph3DErrorBoundary extends Component<Graph3DErrorBoundaryProps, Graph3DErrorBoundaryState> {
+  state: Graph3DErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): Graph3DErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[ProductMapGraph3D]", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex flex-col items-center justify-center gap-4 p-8 text-center`}
+          style={{ minHeight: GRAPH_MIN_HEIGHT_PX, height: GRAPH_MIN_HEIGHT_PX }}
+        >
+          <p className="text-sm text-[#2E2D2C]">
+            El grafo 3D no se pudo cargar. Intenta refrescar la página.
+          </p>
+          {this.props.onSwitchTo2D && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+              onClick={this.props.onSwitchTo2D}
+            >
+              Volver a 2D
+            </Button>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function ProductMapGraph3DInner({ nodes, onNodeClick }: ProductMapGraph3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<ForceGraphMethods<GraphForceNode, GraphForceLink>>();
-  const [dimensions, setDimensions] = useState({ width: 800, height: GRAPH_MIN_HEIGHT_PX });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   const graphData = useMemo(() => buildGraphData(nodes), [nodes]);
+
+  const measureContainer = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    setDimensions({
+      width: Math.max(Math.floor(width), 320),
+      height: Math.max(Math.floor(height), GRAPH_MIN_HEIGHT_PX),
+    });
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      setDimensions({
-        width: Math.max(width, 320),
-        height: Math.max(height, GRAPH_MIN_HEIGHT_PX),
-      });
-    });
-
+    measureContainer();
+    const observer = new ResizeObserver(() => measureContainer());
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [measureContainer]);
 
   useEffect(() => {
     const fg = fgRef.current;
@@ -59,15 +114,15 @@ function ProductMapGraph3D({ nodes, onNodeClick }: ProductMapGraph3DProps) {
     if (link && typeof link.distance === "function") {
       link.distance(60);
     }
-  }, [graphData]);
+  }, [graphData, dimensions.width, dimensions.height]);
 
   useEffect(() => {
-    if (graphData.nodes.length === 0) return;
+    if (graphData.nodes.length === 0 || dimensions.width === 0) return;
     const timer = window.setTimeout(() => {
       fgRef.current?.zoomToFit(400, 48);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [graphData]);
+  }, [graphData, dimensions.width, dimensions.height]);
 
   const handleNodeClick = useCallback(
     (node: GraphForceNode) => {
@@ -76,32 +131,48 @@ function ProductMapGraph3D({ nodes, onNodeClick }: ProductMapGraph3DProps) {
     [onNodeClick],
   );
 
+  const graphReady = dimensions.width > 0 && dimensions.height > 0;
+
   return (
     <div className={PRODUCT_MAP_CANVAS_FRAME_CLASS}>
       <div
         ref={containerRef}
         className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} relative`}
-        style={{ minHeight: GRAPH_MIN_HEIGHT_PX, height: "min(70vh, 720px)" }}
+        style={{ width: "100%", height: GRAPH_MIN_HEIGHT_PX, minHeight: GRAPH_MIN_HEIGHT_PX }}
       >
-        <ForceGraph3D
-          ref={fgRef}
-          width={dimensions.width}
-          height={dimensions.height}
-          graphData={graphData}
-          backgroundColor="transparent"
-          showNavInfo={false}
-          warmupTicks={50}
-          cooldownTicks={100}
-          enableNodeDrag
-          enableNavigationControls
-          nodeLabel="name"
-          nodeColor={(node) => getGraph3DNodeColor(node.raw)}
-          nodeVal={(node) => getGraph3DNodeVal(node.depth)}
-          linkColor={() => "#D4CFC4"}
-          linkOpacity={0.5}
-          linkWidth={1}
-          onNodeClick={handleNodeClick}
-        />
+        {graphReady && (
+          <div
+            className="absolute inset-0"
+            style={{ width: dimensions.width, height: dimensions.height }}
+          >
+            <ForceGraph3D
+              key={`${dimensions.width}x${dimensions.height}`}
+              ref={fgRef}
+              width={dimensions.width}
+              height={dimensions.height}
+              graphData={graphData}
+              backgroundColor={PRODUCT_MAP_BG}
+              showNavInfo={false}
+              warmupTicks={50}
+              cooldownTicks={100}
+              enableNodeDrag
+              enableNavigationControls
+              nodeLabel={(node: GraphForceNode) => node.name ?? ""}
+              nodeColor={(node: GraphForceNode) => getGraph3DNodeColor(node.raw)}
+              nodeVal={(node: GraphForceNode) => getGraph3DNodeVal(node.depth)}
+              linkColor={() => "#D4CFC4"}
+              linkOpacity={0.5}
+              linkWidth={1}
+              onNodeClick={handleNodeClick}
+            />
+          </div>
+        )}
+
+        {!graphReady && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C6017F] border-t-transparent" />
+          </div>
+        )}
 
         <div className="pointer-events-none absolute bottom-3 left-0 right-0 z-10 text-center text-[11px] text-[#717B99]/90">
           Arrastra para rotar · Scroll para zoom · Click en un nodo
@@ -116,8 +187,8 @@ function ProductMapGraph3D({ nodes, onNodeClick }: ProductMapGraph3DProps) {
             onClick={() => {
               const fg = fgRef.current;
               if (!fg) return;
-              const distance = fg.cameraPosition().z;
-              fg.cameraPosition({ z: distance * 0.75 }, undefined, 250);
+              const { z } = fg.cameraPosition();
+              fg.cameraPosition({ z: z * 0.75 }, undefined, 250);
             }}
             aria-label="Acercar"
           >
@@ -131,8 +202,8 @@ function ProductMapGraph3D({ nodes, onNodeClick }: ProductMapGraph3DProps) {
             onClick={() => {
               const fg = fgRef.current;
               if (!fg) return;
-              const distance = fg.cameraPosition().z;
-              fg.cameraPosition({ z: distance * 1.35 }, undefined, 250);
+              const { z } = fg.cameraPosition();
+              fg.cameraPosition({ z: z * 1.35 }, undefined, 250);
             }}
             aria-label="Alejar"
           >
@@ -157,6 +228,14 @@ function ProductMapGraph3D({ nodes, onNodeClick }: ProductMapGraph3DProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ProductMapGraph3D(props: ProductMapGraph3DProps) {
+  return (
+    <Graph3DErrorBoundary onSwitchTo2D={props.onSwitchTo2D}>
+      <ProductMapGraph3DInner {...props} />
+    </Graph3DErrorBoundary>
   );
 }
 
