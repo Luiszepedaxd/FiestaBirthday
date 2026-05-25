@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/lib/supabase";
+import { getProductMapMutationErrorMessage } from "@/lib/product-map-mutation-errors";
 import { getStatusColor } from "@/lib/product-map-status";
 import type { JSONContent } from "@tiptap/react";
 import type {
@@ -198,6 +200,9 @@ export function useCreateNode() {
     onSuccess: () => {
       invalidateAllProductMapQueries(queryClient);
     },
+    onError: (error) => {
+      toast.error(getProductMapMutationErrorMessage(error));
+    },
   });
 }
 
@@ -229,6 +234,9 @@ export function useUpdateNode() {
     onSuccess: () => {
       invalidateAllProductMapQueries(queryClient);
     },
+    onError: (error) => {
+      toast.error(getProductMapMutationErrorMessage(error));
+    },
   });
 }
 
@@ -242,6 +250,9 @@ export function useDeleteNode() {
     },
     onSuccess: () => {
       invalidateAllProductMapQueries(queryClient);
+    },
+    onError: (error) => {
+      toast.error(getProductMapMutationErrorMessage(error));
     },
   });
 }
@@ -274,6 +285,9 @@ export function useUpdateNodeNotes() {
     onSuccess: () => {
       invalidateAllProductMapQueries(queryClient);
     },
+    onError: (error) => {
+      toast.error(getProductMapMutationErrorMessage(error));
+    },
   });
 }
 
@@ -301,6 +315,9 @@ export function useUpdateNodeTargetDate() {
     },
     onSuccess: () => {
       invalidateAllProductMapQueries(queryClient);
+    },
+    onError: (error) => {
+      toast.error(getProductMapMutationErrorMessage(error));
     },
   });
 }

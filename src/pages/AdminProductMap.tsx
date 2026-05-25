@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, CircleDot, GitBranch, Network, Plus, RotateCcw } from "lucide-react";
+import { ArrowLeft, CircleDot, Eye, GitBranch, Network, Plus, RotateCcw, Share2 } from "lucide-react";
+import { getProductMapMutationErrorMessage } from "@/lib/product-map-mutation-errors";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,9 +46,17 @@ type ContextMenuState = {
   y: number;
 };
 
-const AdminProductMap = () => {
+export type ProductMapPageMode = "public" | "admin";
+
+type AdminProductMapProps = {
+  mode?: ProductMapPageMode;
+};
+
+const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
   const navigate = useNavigate();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
+  const canEdit = mode === "admin" && isAdmin;
+  const isPublicMode = mode === "public";
   const { data: root, isLoading: rootLoading, error: rootError } = useRootNode();
   const [viewMode, setViewMode] = useState<ProductMapViewMode>(() => getStoredProductMapViewMode());
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -77,10 +86,10 @@ const AdminProductMap = () => {
   const deleteNode = useDeleteNode();
 
   useEffect(() => {
-    if (!adminLoading && !isAdmin) {
+    if (mode === "admin" && !adminLoading && !isAdmin) {
       navigate("/dashboard", { replace: true });
     }
-  }, [adminLoading, isAdmin, navigate]);
+  }, [mode, adminLoading, isAdmin, navigate]);
 
   useEffect(() => {
     if (root?.id && focusId === null) {
@@ -176,9 +185,20 @@ const AdminProductMap = () => {
   };
 
   const handleNodeContextMenu = (node: ProductMapNodeWithProgress, event: React.MouseEvent) => {
+    if (!canEdit) return;
     event.preventDefault();
     setContextMenu({ node, x: event.clientX, y: event.clientY });
   };
+
+  const handleSharePublicLink = useCallback(async () => {
+    const url = `${window.location.origin}/mapa`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copiado: fiestabirthday.com/mapa");
+    } catch {
+      toast.error("No se pudo copiar el enlace");
+    }
+  }, []);
 
   const handleEditSubmit = async (values: { name: string; status: ProductMapStatus }) => {
     if (!editTarget) return;
@@ -202,8 +222,8 @@ const AdminProductMap = () => {
       }
       setEditMode(null);
       setEditTarget(null);
-    } catch {
-      toast.error("Error al guardar el nodo");
+    } catch (error) {
+      toast.error(getProductMapMutationErrorMessage(error));
     }
   };
 
@@ -224,12 +244,12 @@ const AdminProductMap = () => {
       } else if (wasFocused && root?.id) {
         setFocusId(root.id);
       }
-    } catch {
-      toast.error("Error al eliminar el nodo");
+    } catch (error) {
+      toast.error(getProductMapMutationErrorMessage(error));
     }
   };
 
-  const isPageLoading = adminLoading || rootLoading || !centerNode;
+  const isPageLoading = (mode === "admin" && adminLoading) || rootLoading || !centerNode;
   const isGraphLoading = centerLoading || childrenLoading;
 
   const isAtRoot = Boolean(root?.id && centerId === root.id);
@@ -256,7 +276,7 @@ const AdminProductMap = () => {
   const rootBarColor = root ? getCenterNodeAccentColor(root) : "#9CA3AF";
   const isDetailOpen = detailNodeId !== null;
 
-  if (!adminLoading && !isAdmin) {
+  if (mode === "admin" && !adminLoading && !isAdmin) {
     return null;
   }
 
@@ -271,16 +291,18 @@ const AdminProductMap = () => {
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-[#717B99] hover:text-[#C6017F]"
-                onClick={() => navigate("/admin")}
-                aria-label="Volver al admin"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
+              {!isPublicMode && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-[#717B99] hover:text-[#C6017F]"
+                  onClick={() => navigate("/admin")}
+                  aria-label="Volver al admin"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              )}
               <ToggleGroup
                 type="single"
                 variant="outline"
@@ -342,15 +364,43 @@ const AdminProductMap = () => {
                   <RotateCcw className="mr-1.5 h-4 w-4" />
                   Reset
                 </Button>
+                {canEdit && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="rounded-xl bg-[#C6017F] hover:bg-[#B10072]"
+                    onClick={() => centerNode && openCreateDialog(centerNode)}
+                    disabled={!centerNode}
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Agregar nodo
+                  </Button>
+                )}
+                {mode === "admin" && canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
+                    onClick={() => void handleSharePublicLink()}
+                  >
+                    <Share2 className="mr-1.5 h-4 w-4" />
+                    Compartir
+                  </Button>
+                )}
+              </div>
+            )}
+            {mode === "admin" && canEdit && viewMode !== "mindly" && (
+              <div className="flex shrink-0">
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
-                  className="rounded-xl bg-[#C6017F] hover:bg-[#B10072]"
-                  onClick={() => centerNode && openCreateDialog(centerNode)}
-                  disabled={!centerNode}
+                  className="rounded-xl border-[#E5E5E5] text-[#2E2D2C] hover:bg-[#FFF0F9]"
+                  onClick={() => void handleSharePublicLink()}
                 >
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  Agregar nodo
+                  <Share2 className="mr-1.5 h-4 w-4" />
+                  Compartir
                 </Button>
               </div>
             )}
@@ -403,6 +453,22 @@ const AdminProductMap = () => {
         </div>
       </header>
 
+      {isPublicMode && (
+        <div className="border-b border-[#F2F2F2] bg-[#FFF9F0] px-4 py-2">
+          <div
+            className={`mx-auto flex items-center gap-2 text-xs text-[#717B99] ${
+              viewMode === "panoramic" || viewMode === "graph" ? "max-w-[1600px]" : "max-w-5xl"
+            }`}
+          >
+            <Eye className="h-3.5 w-3.5 shrink-0 text-[#C6017F]" aria-hidden />
+            <p>
+              Estás viendo el mapa de producto de Fiestamas en modo lectura. Para editar, inicia
+              sesión como admin.
+            </p>
+          </div>
+        </div>
+      )}
+
       <main
         className={`mx-auto flex min-h-0 w-full flex-1 flex-col px-2 py-4 sm:px-4 ${
           viewMode === "panoramic" || viewMode === "graph" ? "max-w-[1600px]" : "max-w-5xl"
@@ -432,6 +498,7 @@ const AdminProductMap = () => {
                   canGoBack={canGoBack}
                   onAddChild={() => openCreateDialog(centerNode)}
                   onNodeContextMenu={handleNodeContextMenu}
+                  canEdit={canEdit}
                 />
               )}
             </motion.div>
@@ -478,7 +545,7 @@ const AdminProductMap = () => {
         </AnimatePresence>
       </main>
 
-      {viewMode === "mindly" && contextMenu && (
+      {viewMode === "mindly" && canEdit && contextMenu && (
         <>
           <button
             type="button"
@@ -554,6 +621,7 @@ const AdminProductMap = () => {
         nodeId={detailNodeId}
         onClose={() => setDetailNodeId(null)}
         allNodes={allPanoramicNodes}
+        canEdit={canEdit}
         onEditNode={(node) => {
           setDetailNodeId(null);
           openEditDialog(node);

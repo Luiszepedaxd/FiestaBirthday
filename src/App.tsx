@@ -42,11 +42,12 @@ const App = () => (
           }
         />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/mapa" element={<AdminProductMap mode="public" />} />
         <Route
           path="/admin/mapa"
           element={
             <AuthGuard>
-              <AdminProductMap />
+              <AdminProductMap mode="admin" />
             </AuthGuard>
           }
         />

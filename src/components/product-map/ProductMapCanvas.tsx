@@ -162,6 +162,7 @@ type FlowCanvasInnerProps = {
   canGoBack: boolean;
   onAddChild: () => void;
   onNodeContextMenu: (node: ProductMapNodeWithProgress, event: React.MouseEvent) => void;
+  canEdit?: boolean;
 };
 
 function FlowCanvasInner({
@@ -173,6 +174,7 @@ function FlowCanvasInner({
   canGoBack,
   onAddChild,
   onNodeContextMenu,
+  canEdit = true,
 }: FlowCanvasInnerProps) {
   const { fitView } = useReactFlow();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
@@ -215,6 +217,7 @@ function FlowCanvasInner({
 
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node<FlowNodeData>) => {
+      if (!canEdit) return;
       event.preventDefault();
       if (node.id === CENTER_NODE_ID) {
         onNodeContextMenu(centerNode, event);
@@ -223,7 +226,7 @@ function FlowCanvasInner({
       const selected = childNodes.find((c) => c.id === node.id);
       if (selected) onNodeContextMenu(selected, event);
     },
-    [centerNode, childNodes, onNodeContextMenu],
+    [canEdit, centerNode, childNodes, onNodeContextMenu],
   );
 
   if (isLoading) {
@@ -251,7 +254,7 @@ function FlowCanvasInner({
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
-        onNodeContextMenu={handleNodeContextMenu}
+        onNodeContextMenu={canEdit ? handleNodeContextMenu : undefined}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
@@ -274,15 +277,17 @@ function FlowCanvasInner({
         >
           <div className="pointer-events-auto flex flex-col items-center gap-3 rounded-2xl border border-dashed border-[#E5E5E5] bg-white/80 px-6 py-5 text-center shadow-sm backdrop-blur-sm">
             <p className="text-sm text-[#717B99]">Este nodo aún no tiene ramas</p>
-            <Button
-              type="button"
-              size="lg"
-              onClick={onAddChild}
-              className="h-14 w-14 rounded-full bg-[#C6017F] p-0 hover:bg-[#B10072]"
-              aria-label="Agregar primer hijo"
-            >
-              <Plus className="h-8 w-8" />
-            </Button>
+            {canEdit && (
+              <Button
+                type="button"
+                size="lg"
+                onClick={onAddChild}
+                className="h-14 w-14 rounded-full bg-[#C6017F] p-0 hover:bg-[#B10072]"
+                aria-label="Agregar primer hijo"
+              >
+                <Plus className="h-8 w-8" />
+              </Button>
+            )}
           </div>
         </motion.div>
       )}

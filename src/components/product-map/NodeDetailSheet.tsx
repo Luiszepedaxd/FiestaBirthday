@@ -17,7 +17,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NodeNotesEditor } from "@/components/product-map/NodeNotesEditor";
-import { useIsAdmin } from "@/lib/auth";
 import {
   useNodePath,
   useProductMapNode,
@@ -43,6 +42,7 @@ export type NodeDetailSheetProps = {
   allNodes: ProductMapNodeWithProgress[];
   onEditNode: (node: ProductMapNodeWithProgress) => void;
   onFocusInMindly: (nodeId: string) => void;
+  canEdit?: boolean;
 };
 
 export function NodeDetailSheet({
@@ -52,8 +52,8 @@ export function NodeDetailSheet({
   allNodes,
   onEditNode,
   onFocusInMindly,
+  canEdit = false,
 }: NodeDetailSheetProps) {
-  const { isAdmin } = useIsAdmin();
   const { data: node, isLoading, isError } = useProductMapNode(open ? nodeId : null);
   const { data: path = [], isLoading: pathLoading } = useNodePath(open ? nodeId : null);
   const updateNotes = useUpdateNodeNotes();
@@ -87,26 +87,26 @@ export function NodeDetailSheet({
 
   const handleNotesChange = useCallback(
     (json: JSONContent, plainText: string) => {
-      if (!nodeId || !isAdmin) return;
+      if (!nodeId || !canEdit) return;
       updateNotes.mutate({ nodeId, notes: json, notesPlainText: plainText });
     },
-    [isAdmin, nodeId, updateNotes],
+    [canEdit, nodeId, updateNotes],
   );
 
   const handleTargetDateSelect = useCallback(
     (date: Date | undefined) => {
-      if (!nodeId || !isAdmin) return;
+      if (!nodeId || !canEdit) return;
       const value = date ? format(date, "yyyy-MM-dd") : null;
       updateTargetDate.mutate({ nodeId, targetDate: value });
       setCalendarOpen(false);
     },
-    [isAdmin, nodeId, updateTargetDate],
+    [canEdit, nodeId, updateTargetDate],
   );
 
   const handleClearTargetDate = useCallback(() => {
-    if (!nodeId || !isAdmin) return;
+    if (!nodeId || !canEdit) return;
     updateTargetDate.mutate({ nodeId, targetDate: null });
-  }, [isAdmin, nodeId, updateTargetDate]);
+  }, [canEdit, nodeId, updateTargetDate]);
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
@@ -197,7 +197,7 @@ export function NodeDetailSheet({
                     Vence el {formatTargetDateLabel(node.target_date)} ·{" "}
                     <span className="text-[#717B99]">{formatDaysUntil(node.target_date)}</span>
                   </p>
-                  {isAdmin && (
+                  {canEdit && (
                     <div className="flex flex-wrap items-center gap-2">
                       <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                         <PopoverTrigger asChild>
@@ -237,7 +237,7 @@ export function NodeDetailSheet({
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-[#717B99]">Sin fecha objetivo</p>
-                  {isAdmin && (
+                  {canEdit && (
                     <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -275,12 +275,12 @@ export function NodeDetailSheet({
                 )}
               </div>
 
-              {isAdmin || hasNotesContent ? (
+              {canEdit || hasNotesContent ? (
                 <NodeNotesEditor
                   key={node.id}
                   content={node.notes}
                   onChange={handleNotesChange}
-                  readOnly={!isAdmin}
+                  readOnly={!canEdit}
                 />
               ) : (
                 <div className="rounded-xl border border-dashed border-[#E5E5E5] bg-[#FAF8F5] px-4 py-8 text-center text-sm text-[#717B99]">
@@ -290,7 +290,7 @@ export function NodeDetailSheet({
             </section>
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-              {isAdmin && (
+              {canEdit && (
                 <Button
                   type="button"
                   variant="outline"

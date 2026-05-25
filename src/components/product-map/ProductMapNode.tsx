@@ -25,6 +25,7 @@ type ProductMapNodeBubbleProps = {
   className?: string;
   onClick?: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
+  canEdit?: boolean;
   animationDelay?: number;
   variant?: "default" | "flow";
   hasNotes?: boolean;
@@ -178,6 +179,7 @@ export function ProductMapNodeBubble({
   className,
   onClick,
   onContextMenu,
+  canEdit = true,
   animationDelay = 0,
   variant = "default",
   hasNotes = false,
@@ -229,7 +231,11 @@ export function ProductMapNodeBubble({
   );
 
   if (variant === "flow") {
-    return <div className="cursor-pointer">{wrapped}</div>;
+    return (
+      <div className={canEdit ? "cursor-pointer" : "cursor-default"} title={canEdit ? undefined : "Solo lectura"}>
+        {wrapped}
+      </div>
+    );
   }
 
   return (
@@ -238,11 +244,15 @@ export function ProductMapNodeBubble({
       initial={{ opacity: 0, scale: 0.6 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.35, delay: animationDelay, ease: [0.2, 0.8, 0.2, 1] }}
-      whileHover={{ scale: 1.06 }}
-      whileTap={{ scale: 0.96 }}
+      whileHover={canEdit ? { scale: 1.06 } : undefined}
+      whileTap={canEdit ? { scale: 0.96 } : undefined}
       onClick={onClick}
-      onContextMenu={onContextMenu}
-      className="cursor-pointer outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[#C6017F] focus-visible:ring-offset-[#FAF8F5]"
+      onContextMenu={canEdit ? onContextMenu : undefined}
+      title={canEdit ? undefined : "Solo lectura"}
+      className={cn(
+        "outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-[#C6017F] focus-visible:ring-offset-[#FAF8F5]",
+        canEdit ? "cursor-pointer" : "cursor-default",
+      )}
     >
       {wrapped}
     </motion.button>
