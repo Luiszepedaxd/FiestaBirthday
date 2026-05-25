@@ -253,10 +253,10 @@ function FlowCanvasInner({
 
     const timer = window.setTimeout(() => {
       void fitView({
-        padding: PRODUCT_MAP_CANVAS_SAFE_PADDING_PX,
+        padding: 0.15,
         duration: 280,
-        minZoom: 0.5,
-        maxZoom: 1.2,
+        minZoom: 0.4,
+        maxZoom: 1.5,
       });
     }, 120);
 
