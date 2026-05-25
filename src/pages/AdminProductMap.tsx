@@ -665,7 +665,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
       )}
 
       <main
-        className={`mx-auto flex min-h-0 w-full flex-1 flex-col px-2 py-4 sm:px-4 ${
+        className={`mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden px-2 py-4 sm:min-h-[600px] sm:px-4 ${
           isWideView ? "max-w-[1600px]" : "max-w-5xl"
         }`}
       >

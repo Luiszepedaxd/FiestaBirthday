@@ -22,8 +22,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 const CENTER_NODE_ID = "__center__";
-const ORBIT_RADIUS_MIN = 200;
-const ORBIT_RADIUS_MAX = 500;
+const CANVAS_SIZE_FALLBACK = { width: 800, height: 600 };
+const CANVAS_MIN_DIMENSION = 400;
+const ORBIT_RADIUS_MIN = 180;
+const ORBIT_RADIUS_MAX = 450;
+const ORBIT_RADIUS_FACTOR = 0.4;
 const CLICK_DELAY_MS = 250;
 
 type FlowNodeData = {
@@ -84,28 +87,20 @@ const nodeTypes = {
   productMapBubble: ProductMapFlowNode,
 };
 
-function getOrbitRadiusFactor(childCount: number): number {
-  if (childCount > 8) return 0.4;
-  if (childCount < 4) return 0.32;
-  return 0.35;
-}
-
-function getSafeOrbitRadius(
-  containerWidth: number,
-  containerHeight: number,
-  childCount: number,
-): number {
-  const usableW = Math.max(0, containerWidth - PRODUCT_MAP_CANVAS_SAFE_PADDING_PX * 2);
-  const usableH = Math.max(0, containerHeight - PRODUCT_MAP_CANVAS_SAFE_PADDING_PX * 2);
-  const usableDim = Math.min(usableW, usableH);
-  const raw = usableDim * getOrbitRadiusFactor(childCount);
+function getOrbitRadius(containerWidth: number, containerHeight: number): number {
+  const usableDim = Math.max(
+    200,
+    Math.min(containerWidth, containerHeight) - PRODUCT_MAP_CANVAS_SAFE_PADDING_PX * 2,
+  );
+  const raw = usableDim * ORBIT_RADIUS_FACTOR;
   return Math.max(ORBIT_RADIUS_MIN, Math.min(ORBIT_RADIUS_MAX, raw));
 }
 
 function buildGraph(
   centerNode: ProductMapNodeWithProgress,
   childNodes: ProductMapNodeWithProgress[],
-  radius: number,
+  center: { x: number; y: number },
+  orbitRadius: number,
 ): { nodes: ProductMapFlowNodeType[]; edges: Edge[] } {
   const centerOffset = NODE_DIMENSIONS.center / 2;
   const childOffset = NODE_DIMENSIONS.child / 2;
@@ -114,7 +109,10 @@ function buildGraph(
     {
       id: CENTER_NODE_ID,
       type: "productMapBubble",
-      position: { x: -centerOffset, y: -centerOffset },
+      position: {
+        x: center.x - centerOffset,
+        y: center.y - centerOffset,
+      },
       data: {
         label: centerNode.name,
         status: centerNode.status,
@@ -135,9 +133,9 @@ function buildGraph(
   const count = childNodes.length;
 
   childNodes.forEach((child, index) => {
-    const angle = (2 * Math.PI * index) / Math.max(count, 1) - Math.PI / 2;
-    const x = radius * Math.cos(angle);
-    const y = radius * Math.sin(angle);
+    const angle = (index / Math.max(count, 1)) * 2 * Math.PI - Math.PI / 2;
+    const x = center.x + Math.cos(angle) * orbitRadius;
+    const y = center.y + Math.sin(angle) * orbitRadius;
 
     nodes.push({
       id: child.id,
@@ -196,23 +194,41 @@ function FlowCanvasInner({
   canEdit = true,
 }: FlowCanvasInnerProps) {
   const { fitView } = useReactFlow();
-  const flowAreaRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [flowSize, setFlowSize] = useState({ width: 800, height: 600 });
+  const [size, setSize] = useState(CANVAS_SIZE_FALLBACK);
 
   useEffect(() => {
-    const el = flowAreaRef.current;
+    const el = containerRef.current;
     if (!el) return;
+
+    const applySize = (width: number, height: number) => {
+      if (width < 1 || height < 1) return;
+      setSize((prev) =>
+        prev.width === width && prev.height === height ? prev : { width, height },
+      );
+    };
+
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      applySize(rect.width, rect.height);
+    };
+
+    measure();
+    const rafId = requestAnimationFrame(measure);
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
       const { width, height } = entry.contentRect;
-      setFlowSize({ width, height });
+      applySize(width, height);
     });
 
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -224,23 +240,28 @@ function FlowCanvasInner({
     };
   }, []);
 
-  const radius = getSafeOrbitRadius(flowSize.width, flowSize.height, childNodes.length);
+  const hasMeasuredSize = size.width > 0 && size.height > 0;
+  const containerWidth = Math.max(size.width, CANVAS_MIN_DIMENSION);
+  const containerHeight = Math.max(size.height, CANVAS_MIN_DIMENSION);
+  const center = { x: containerWidth / 2, y: containerHeight / 2 };
+  const orbitRadius = getOrbitRadius(containerWidth, containerHeight);
 
   const graph = useMemo(
-    () => buildGraph(centerNode, childNodes, radius),
-    [centerNode, childNodes, radius],
+    () => buildGraph(centerNode, childNodes, center, orbitRadius),
+    [centerNode, childNodes, center.x, center.y, orbitRadius],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<ProductMapFlowNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
+    if (!hasMeasuredSize) return;
     setNodes(graph.nodes);
     setEdges(graph.edges);
-  }, [graph, setNodes, setEdges]);
+  }, [graph, hasMeasuredSize, setNodes, setEdges]);
 
   useEffect(() => {
-    if (nodes.length === 0 || flowSize.width <= 0 || flowSize.height <= 0) return;
+    if (!hasMeasuredSize || nodes.length === 0) return;
 
     const timer = window.setTimeout(() => {
       void fitView({
@@ -252,7 +273,16 @@ function FlowCanvasInner({
     }, 120);
 
     return () => window.clearTimeout(timer);
-  }, [fitView, nodes, edges, centerNode.id, childNodes.length, flowSize.width, flowSize.height]);
+  }, [
+    fitView,
+    hasMeasuredSize,
+    nodes,
+    edges,
+    centerNode.id,
+    childNodes.length,
+    size.width,
+    size.height,
+  ]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
@@ -303,7 +333,7 @@ function FlowCanvasInner({
     return (
       <div className={`${PRODUCT_MAP_CANVAS_FRAME_CLASS} flex min-h-0 flex-1 flex-col`}>
         <div
-          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex min-h-[500px] flex-1 items-center justify-center gap-4`}
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} flex min-h-[600px] flex-1 items-center justify-center gap-4`}
         >
           <Skeleton className="h-32 w-32 rounded-full" />
           <Skeleton className="h-20 w-20 rounded-full" />
@@ -313,12 +343,23 @@ function FlowCanvasInner({
     );
   }
 
+  if (!hasMeasuredSize) {
+    return (
+      <div className="flex min-h-0 w-full flex-1 flex-col">
+        <div
+          ref={containerRef}
+          className={`${PRODUCT_MAP_CANVAS_FRAME_CLASS} relative min-h-[600px] w-full flex-1 overflow-hidden`}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
       <div className={`${PRODUCT_MAP_CANVAS_FRAME_CLASS} flex min-h-0 flex-1 flex-col`}>
         <div
-          ref={flowAreaRef}
-          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} relative h-full min-h-[500px] w-full flex-1`}
+          ref={containerRef}
+          className={`${PRODUCT_MAP_CANVAS_INNER_CLASS} relative h-full min-h-[600px] w-full flex-1 overflow-hidden`}
         >
           <ReactFlow
             nodes={nodes}
