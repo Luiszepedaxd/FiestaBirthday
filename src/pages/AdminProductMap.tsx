@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, CircleDot, Eye, GitBranch, Network, Plus, RotateCcw, Share2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CircleDot,
+  Eye,
+  GitBranch,
+  Network,
+  Plus,
+  RotateCcw,
+  Search,
+  Share2,
+} from "lucide-react";
 import { getProductMapMutationErrorMessage } from "@/lib/product-map-mutation-errors";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -24,6 +34,7 @@ import {
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
 import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
+import { ProductMapSearch } from "@/components/product-map/ProductMapSearch";
 import { ProductMapGraph } from "@/components/product-map/ProductMapGraph";
 import { NodeDetailSheet } from "@/components/product-map/NodeDetailSheet";
 import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
@@ -65,6 +76,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
   const [deleteTarget, setDeleteTarget] = useState<ProductMapNodeWithProgress | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const centerId = focusId ?? root?.id ?? null;
   const { data: centerNode, isLoading: centerLoading } = useProductMapNode(centerId);
@@ -112,6 +124,19 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
     }
   }, [allNodesError]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return;
+      const target = e.target as HTMLElement;
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      e.preventDefault();
+      setSearchOpen(true);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   const handleViewModeChange = useCallback((mode: ProductMapViewMode) => {
     setViewMode(mode);
     setStoredProductMapViewMode(mode);
@@ -134,6 +159,25 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
     },
     [handleViewModeChange],
   );
+
+  const handleSearchSelectNode = useCallback(
+    (nodeId: string) => {
+      setSearchOpen(false);
+      handleViewModeChange("mindly");
+      setFocusId(nodeId);
+      setDetailNodeId(nodeId);
+      setContextMenu(null);
+    },
+    [handleViewModeChange],
+  );
+
+  const handleMindlyNodeDoubleClick = useCallback((nodeId: string) => {
+    setDetailNodeId(nodeId);
+  }, []);
+
+  const isMac =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 
   const canGoBack = Boolean(centerNode?.parent_id);
 
@@ -341,6 +385,20 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                   Grafo
                 </ToggleGroupItem>
               </ToggleGroup>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 rounded-xl text-[#717B99] hover:bg-[#FFF0F9] hover:text-[#C6017F]"
+                onClick={() => setSearchOpen(true)}
+                aria-label="Buscar nodos"
+              >
+                <Search className="mr-1.5 h-4 w-4" />
+                Buscar
+                <kbd className="ml-1.5 hidden rounded border border-[#E5E5E5] bg-[#FAF8F5] px-1.5 py-0.5 font-sans text-[10px] font-medium text-[#717B99] sm:inline">
+                  {isMac ? "⌘K" : "Ctrl+K"}
+                </kbd>
+              </Button>
               {viewMode === "mindly" &&
                 (isPageLoading ? (
                   <Skeleton className="h-5 w-48" />
@@ -498,6 +556,7 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                   canGoBack={canGoBack}
                   onAddChild={() => openCreateDialog(centerNode)}
                   onNodeContextMenu={handleNodeContextMenu}
+                  onNodeDoubleClick={handleMindlyNodeDoubleClick}
                   canEdit={canEdit}
                 />
               )}
@@ -642,6 +701,12 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
         childCount={deleteChildNodes.length}
         isDeleting={deleteNode.isPending}
         onConfirm={() => void handleDeleteConfirm()}
+      />
+
+      <ProductMapSearch
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onSelectNode={handleSearchSelectNode}
       />
     </div>
   );

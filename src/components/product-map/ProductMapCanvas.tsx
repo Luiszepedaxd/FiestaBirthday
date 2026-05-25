@@ -162,6 +162,7 @@ type FlowCanvasInnerProps = {
   canGoBack: boolean;
   onAddChild: () => void;
   onNodeContextMenu: (node: ProductMapNodeWithProgress, event: React.MouseEvent) => void;
+  onNodeDoubleClick?: (nodeId: string) => void;
   canEdit?: boolean;
 };
 
@@ -174,6 +175,7 @@ function FlowCanvasInner({
   canGoBack,
   onAddChild,
   onNodeContextMenu,
+  onNodeDoubleClick,
   canEdit = true,
 }: FlowCanvasInnerProps) {
   const { fitView } = useReactFlow();
@@ -215,6 +217,15 @@ function FlowCanvasInner({
     [canGoBack, childNodes, onSelectCenter, onSelectChild],
   );
 
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
+      if (!onNodeDoubleClick) return;
+      const nodeId = node.id === CENTER_NODE_ID ? centerNode.id : node.id;
+      onNodeDoubleClick(nodeId);
+    },
+    [centerNode.id, onNodeDoubleClick],
+  );
+
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node<FlowNodeData>) => {
       if (!canEdit) return;
@@ -254,6 +265,7 @@ function FlowCanvasInner({
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick ? handleNodeDoubleClick : undefined}
         onNodeContextMenu={canEdit ? handleNodeContextMenu : undefined}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -292,11 +304,10 @@ function FlowCanvasInner({
         </motion.div>
       )}
 
-      {canGoBack && (
-        <p className="pointer-events-none absolute bottom-3 left-0 right-0 z-10 text-center text-xs text-[#717B99]">
-          Toca el centro para volver · Esc o ← para atrás
-        </p>
-      )}
+      <p className="pointer-events-none absolute bottom-3 left-0 right-0 z-10 text-center text-xs text-[#717B99]">
+        Click para navegar · Doble click para detalles
+        {canGoBack ? " · Esc o ← atrás" : ""}
+      </p>
     </div>
   );
 }

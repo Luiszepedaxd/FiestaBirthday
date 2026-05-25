@@ -24,6 +24,7 @@ type ProductMapNodeBubbleProps = {
   size?: "sm" | "md" | "lg";
   className?: string;
   onClick?: () => void;
+  onDoubleClick?: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   canEdit?: boolean;
   animationDelay?: number;
@@ -178,6 +179,7 @@ export function ProductMapNodeBubble({
   size = "md",
   className,
   onClick,
+  onDoubleClick,
   onContextMenu,
   canEdit = true,
   animationDelay = 0,
@@ -247,6 +249,7 @@ export function ProductMapNodeBubble({
       whileHover={canEdit ? { scale: 1.06 } : undefined}
       whileTap={canEdit ? { scale: 0.96 } : undefined}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={canEdit ? onContextMenu : undefined}
       title={canEdit ? undefined : "Solo lectura"}
       className={cn(
