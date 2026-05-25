@@ -378,3 +378,5 @@ export function ProductMapTimeline({
     </div>
   );
 }
+
+export default ProductMapTimeline;

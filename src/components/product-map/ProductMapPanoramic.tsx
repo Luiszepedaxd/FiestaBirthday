@@ -232,3 +232,5 @@ export function ProductMapPanoramic(props: ProductMapPanoramicProps) {
     </ReactFlowProvider>
   );
 }
+
+export default ProductMapPanoramic;

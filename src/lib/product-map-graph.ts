@@ -2,9 +2,22 @@ import { getColorByProgress, getStatusColor, isVisuallyUntracked } from "@/lib/p
 import type { ProductMapNodeWithProgress } from "@/types/product-map";
 
 const RADIUS_BY_DEPTH = [14, 10, 7, 4] as const;
+const VAL_3D_BY_DEPTH = [18, 12, 8, 4] as const;
 
 export function getGraphNodeRadius(depth: number): number {
   return RADIUS_BY_DEPTH[Math.min(depth, RADIUS_BY_DEPTH.length - 1)];
+}
+
+export function getGraph3DNodeVal(depth: number): number {
+  return VAL_3D_BY_DEPTH[Math.min(depth, VAL_3D_BY_DEPTH.length - 1)];
+}
+
+/** 3D graph: base status/progress color, tinted when time health is at risk or overdue. */
+export function getGraph3DNodeColor(node: ProductMapNodeWithProgress): string {
+  const base = getGraphNodeColor(node);
+  if (node.time_health === "overdue") return "#EF4444";
+  if (node.time_health === "at_risk") return "#F59E0B";
+  return base;
 }
 
 export function computeNodeDepths(

@@ -371,3 +371,5 @@ export function ProductMapCanvas(props: ProductMapCanvasProps) {
     </ReactFlowProvider>
   );
 }
+
+export default ProductMapCanvas;

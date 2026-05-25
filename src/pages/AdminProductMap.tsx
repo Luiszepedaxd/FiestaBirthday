@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   ArrowLeft,
+  Box,
   CalendarDays,
   CircleDot,
   Eye,
   GitBranch,
+  LayoutGrid,
   Network,
   Plus,
   RotateCcw,
@@ -36,16 +38,17 @@ import {
   getCenterNodeAccentColor,
   isVisuallyUntracked,
 } from "@/lib/product-map-status";
-import { ProductMapCanvas } from "@/components/product-map/ProductMapCanvas";
 import { ProductMapSearch } from "@/components/product-map/ProductMapSearch";
-import { ProductMapGraph } from "@/components/product-map/ProductMapGraph";
 import { NodeDetailSheet } from "@/components/product-map/NodeDetailSheet";
-import { ProductMapPanoramic } from "@/components/product-map/ProductMapPanoramic";
-import { ProductMapTimeline } from "@/components/product-map/ProductMapTimeline";
 import { ProductMapBreadcrumb } from "@/components/product-map/ProductMapBreadcrumb";
 import { NodeEditDialog } from "@/components/product-map/NodeEditDialog";
 import { DeleteNodeDialog } from "@/components/product-map/DeleteNodeDialog";
 import { PRODUCT_MAP_BG } from "@/components/product-map/constants";
+import {
+  getStoredProductMapGraphDimension,
+  setStoredProductMapGraphDimension,
+  type ProductMapGraphDimension,
+} from "@/lib/product-map-graph-dimension";
 import {
   getStoredProductMapViewMode,
   setStoredProductMapViewMode,
@@ -71,6 +74,19 @@ type AdminProductMapProps = {
   mode?: ProductMapPageMode;
 };
 
+const ProductMapCanvas = lazy(() => import("@/components/product-map/ProductMapCanvas"));
+const ProductMapPanoramic = lazy(() => import("@/components/product-map/ProductMapPanoramic"));
+const ProductMapGraph = lazy(() => import("@/components/product-map/ProductMapGraph"));
+const ProductMapTimeline = lazy(() => import("@/components/product-map/ProductMapTimeline"));
+
+function ViewLoadingFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center p-12">
+      <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C6017F] border-t-transparent" />
+    </div>
+  );
+}
+
 const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
   const navigate = useNavigate();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
@@ -78,6 +94,9 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
   const isPublicMode = mode === "public";
   const { data: root, isLoading: rootLoading, error: rootError } = useRootNode();
   const [viewMode, setViewMode] = useState<ProductMapViewMode>(() => getStoredProductMapViewMode());
+  const [graphDimension, setGraphDimension] = useState<ProductMapGraphDimension>(() =>
+    getStoredProductMapGraphDimension(),
+  );
   const [focusId, setFocusId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [editTarget, setEditTarget] = useState<ProductMapNodeWithProgress | null>(null);
@@ -149,6 +168,11 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
     setViewMode(mode);
     setStoredProductMapViewMode(mode);
     setContextMenu(null);
+  }, []);
+
+  const handleGraphDimensionChange = useCallback((dimension: ProductMapGraphDimension) => {
+    setGraphDimension(dimension);
+    setStoredProductMapGraphDimension(dimension);
   }, []);
 
   const handleOpenNodeDetail = useCallback((nodeId: string) => {
@@ -425,6 +449,38 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                   Timeline
                 </ToggleGroupItem>
               </ToggleGroup>
+              {viewMode === "graph" && (
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  value={graphDimension}
+                  onValueChange={(value) => {
+                    if (value === "2d" || value === "3d") {
+                      handleGraphDimensionChange(value);
+                    }
+                  }}
+                  className="shrink-0 rounded-lg border border-[#E5E5E5] bg-white p-0.5"
+                  aria-label="Dimensión del grafo"
+                >
+                  <ToggleGroupItem
+                    value="2d"
+                    className="rounded-md px-2.5 py-1 text-xs data-[state=on]:bg-[#FFF0F9] data-[state=on]:text-[#C6017F]"
+                    aria-label="Grafo 2D"
+                  >
+                    <LayoutGrid className="mr-1 h-3.5 w-3.5" />
+                    2D
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="3d"
+                    className="rounded-md px-2.5 py-1 text-xs data-[state=on]:bg-[#FFF0F9] data-[state=on]:text-[#C6017F]"
+                    aria-label="Grafo 3D"
+                  >
+                    <Box className="mr-1 h-3.5 w-3.5" />
+                    3D
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              )}
               <Button
                 type="button"
                 variant="ghost"
@@ -621,18 +677,20 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
                   <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C6017F] border-t-transparent" />
                 </div>
               ) : (
-                <ProductMapCanvas
-                  centerNode={centerNode}
-                  childNodes={childNodes}
-                  isLoading={isGraphLoading}
-                  onSelectChild={(node) => setFocusId(node.id)}
-                  onSelectCenter={goBack}
-                  canGoBack={canGoBack}
-                  onAddChild={() => openCreateDialog(centerNode)}
-                  onNodeContextMenu={handleNodeContextMenu}
-                  onNodeDoubleClick={handleMindlyNodeDoubleClick}
-                  canEdit={canEdit}
-                />
+                <Suspense fallback={<ViewLoadingFallback />}>
+                  <ProductMapCanvas
+                    centerNode={centerNode}
+                    childNodes={childNodes}
+                    isLoading={isGraphLoading}
+                    onSelectChild={(node) => setFocusId(node.id)}
+                    onSelectCenter={goBack}
+                    canGoBack={canGoBack}
+                    onAddChild={() => openCreateDialog(centerNode)}
+                    onNodeContextMenu={handleNodeContextMenu}
+                    onNodeDoubleClick={handleMindlyNodeDoubleClick}
+                    canEdit={canEdit}
+                  />
+                </Suspense>
               )}
             </motion.div>
           )}
@@ -645,12 +703,14 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
               transition={{ duration: 0.2 }}
               className="flex flex-1 flex-col"
             >
-              <ProductMapPanoramic
-                nodes={allPanoramicNodes}
-                isLoading={allNodesLoading}
-                onNodeClick={handlePanoramicNodeClick}
-                onNodeDoubleClick={handlePanoramicNodeDoubleClick}
-              />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <ProductMapPanoramic
+                  nodes={allPanoramicNodes}
+                  isLoading={allNodesLoading}
+                  onNodeClick={handlePanoramicNodeClick}
+                  onNodeDoubleClick={handlePanoramicNodeDoubleClick}
+                />
+              </Suspense>
               {!allNodesLoading && allPanoramicNodes.length > 0 && (
                 <p className="mt-2 text-center text-xs text-[#717B99]">
                   {allPanoramicNodes.length} nodos en el árbol · Click para detalles · Doble click
@@ -668,11 +728,14 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
               transition={{ duration: 0.2 }}
               className="flex flex-1 flex-col"
             >
-              <ProductMapGraph
-                nodes={allPanoramicNodes}
-                isLoading={allNodesLoading}
-                onNodeClick={(node) => setDetailNodeId(node.id)}
-              />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <ProductMapGraph
+                  nodes={allPanoramicNodes}
+                  isLoading={allNodesLoading}
+                  dimension={graphDimension}
+                  onNodeClick={(node) => setDetailNodeId(node.id)}
+                />
+              </Suspense>
             </motion.div>
           )}
           {viewMode === "timeline" && (
@@ -684,13 +747,15 @@ const AdminProductMap = ({ mode = "admin" }: AdminProductMapProps) => {
               transition={{ duration: 0.2 }}
               className="flex flex-1 flex-col"
             >
-              <ProductMapTimeline
-                nodes={allPanoramicNodes}
-                rootId={root?.id}
-                isLoading={allNodesLoading}
-                onNodeClick={handleOpenNodeDetail}
-                onGoToRoot={handleGoToRootInMindly}
-              />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <ProductMapTimeline
+                  nodes={allPanoramicNodes}
+                  rootId={root?.id}
+                  isLoading={allNodesLoading}
+                  onNodeClick={handleOpenNodeDetail}
+                  onGoToRoot={handleGoToRootInMindly}
+                />
+              </Suspense>
             </motion.div>
           )}
         </AnimatePresence>
