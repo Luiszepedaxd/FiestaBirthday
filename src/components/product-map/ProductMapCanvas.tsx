@@ -240,7 +240,6 @@ function FlowCanvasInner({
     };
   }, []);
 
-  const hasMeasuredSize = size.width > 0 && size.height > 0;
   const containerWidth = Math.max(size.width, CANVAS_MIN_DIMENSION);
   const containerHeight = Math.max(size.height, CANVAS_MIN_DIMENSION);
   const center = { x: containerWidth / 2, y: containerHeight / 2 };
@@ -251,38 +250,28 @@ function FlowCanvasInner({
     [centerNode, childNodes, center.x, center.y, orbitRadius],
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<ProductMapFlowNodeType>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<ProductMapFlowNodeType>(graph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(graph.edges);
 
   useEffect(() => {
-    if (!hasMeasuredSize) return;
     setNodes(graph.nodes);
     setEdges(graph.edges);
-  }, [graph, hasMeasuredSize, setNodes, setEdges]);
+  }, [graph, setNodes, setEdges]);
 
   useEffect(() => {
-    if (!hasMeasuredSize || nodes.length === 0) return;
+    if (nodes.length === 0) return;
 
     const timer = window.setTimeout(() => {
       void fitView({
-        padding: PRODUCT_MAP_CANVAS_SAFE_PADDING_PX,
+        padding: 0.25,
         duration: 280,
-        minZoom: 0.55,
-        maxZoom: 1.25,
+        minZoom: 0.4,
+        maxZoom: 1.5,
       });
-    }, 120);
+    }, 200);
 
     return () => window.clearTimeout(timer);
-  }, [
-    fitView,
-    hasMeasuredSize,
-    nodes,
-    edges,
-    centerNode.id,
-    childNodes.length,
-    size.width,
-    size.height,
-  ]);
+  }, [fitView, nodes, edges, centerNode.id, childNodes.length]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
@@ -339,17 +328,6 @@ function FlowCanvasInner({
           <Skeleton className="h-20 w-20 rounded-full" />
           <Skeleton className="h-20 w-20 rounded-full" />
         </div>
-      </div>
-    );
-  }
-
-  if (!hasMeasuredSize) {
-    return (
-      <div className="flex min-h-0 w-full flex-1 flex-col">
-        <div
-          ref={containerRef}
-          className={`${PRODUCT_MAP_CANVAS_FRAME_CLASS} relative min-h-[600px] w-full flex-1 overflow-hidden`}
-        />
       </div>
     );
   }
